@@ -1,0 +1,72 @@
+
+project tools/seL4/
+diff --git a/elfloader-tool/include/drivers/smp.h b/elfloader-tool/include/drivers/smp.h
+index fa72a59..da73fd3 100644
+--- a/elfloader-tool/include/drivers/smp.h
++++ b/elfloader-tool/include/drivers/smp.h
+@@ -24,3 +24,5 @@ extern struct smp_cpu_data secondary_data;
+ void secondary_startup(void);
+ void smp_register_handler(struct elfloader_device *dev);
+ int plat_cpu_on(struct elfloader_cpu *cpu, void *entry, void *stack);
++
++int spin_table_cpu_relese(struct elfloader_cpu *cpu, void *entry, void *stack);
+diff --git a/elfloader-tool/src/arch-arm/drivers/spin_table.c b/elfloader-tool/src/arch-arm/drivers/spin_table.c
+new file mode 100644
+index 0000000..2448f38
+--- /dev/null
++++ b/elfloader-tool/src/arch-arm/drivers/spin_table.c
+@@ -0,0 +1,38 @@
++/*
++ * Copyright 2020, Data61, CSIRO (ABN 41 687 119 230)
++ *
++ * SPDX-License-Identifier: GPL-2.0-only
++ */
++
++#include <elfloader_common.h>
++#include <devices_gen.h>
++#include <drivers/common.h>
++#include <drivers/smp.h>
++#include <armv/machine.h>
++#include <armv/smp.h>
++
++#include <types.h>
++
++int spin_table_cpu_relese(UNUSED struct elfloader_cpu *cpu, UNUSED void *entry, UNUSED void *stack)
++{
++#if CONFIG_MAX_NUM_NODES > 1
++
++    // get cpu spin table entry
++    void** spin_entry = (void**)(cpu->extra_data);
++
++    secondary_data.entry = entry;
++    secondary_data.stack = stack;
++
++    // set cpu relese address
++    *spin_entry = (void*)secondary_startup;
++
++    dmb();
++
++    // send event to wake up cores
++    __asm__ volatile("sev");
++
++    return 0;
++#else
++    return -1;
++#endif
++}
+\ No newline at end of file
+diff --git a/elfloader-tool/src/drivers/smp/common.c b/elfloader-tool/src/drivers/smp/common.c
+index 48a73f0..274c54e 100644
+--- a/elfloader-tool/src/drivers/smp/common.c
++++ b/elfloader-tool/src/drivers/smp/common.c
+@@ -28,6 +28,10 @@ void smp_register_handler(struct elfloader_device *dev)
+ 
+ WEAK int plat_cpu_on(struct elfloader_cpu *cpu, void *entry, void *stack)
+ {
++    if(strcmp(cpu->enable_method, "spin-table") == 0) {
++        return spin_table_cpu_relese(cpu, entry, stack);
++    }
++
+     if (!smp_ops) {
+         return -1;
+     }

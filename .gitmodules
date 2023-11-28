@@ -1,0 +1,74 @@
+[submodule "seL4/kernel"]
+	path = seL4/kernel
+	url = https://github.com/seL4/seL4.git
+
+
+[submodule "seL4/projects/seL4_libs"]
+	path = seL4/projects/seL4_libs
+	url = https://github.com/seL4/seL4_libs.git
+
+
+[submodule "seL4/projects/seL4_projects_libs"]
+	path = seL4/projects/seL4_projects_libs
+	url = https://github.com/seL4/seL4_projects_libs.git
+
+
+[submodule "seL4/projects/sel4runtime"]
+	path = seL4/projects/sel4runtime
+	url = https://github.com/seL4/sel4runtime.git
+
+
+[submodule "seL4/projects/camkes-tool"]
+	path = seL4/projects/camkes-tool
+	url = https://github.com/seL4/camkes-tool.git
+
+
+[submodule "seL4/projects/camkes-vm"]
+	path = seL4/projects/camkes-vm
+	url = https://github.com/seL4/camkes-vm.git
+
+
+[submodule "seL4/projects/capdl"]
+	path = seL4/projects/capdl
+	url = https://github.com/seL4/capdl.git
+
+
+[submodule "seL4/projects/global-components"]
+	path = seL4/projects/global-components
+	url = https://github.com/seL4/global-components.git
+
+
+[submodule "seL4/projects/musllibc"]
+	path = seL4/projects/musllibc
+	url = https://github.com/seL4/musllibc.git
+
+
+[submodule "seL4/projects/projects_libs"]
+	path = seL4/projects/projects_libs
+	url = https://github.com/seL4/projects_libs.git
+
+
+[submodule "seL4/projects/util_libs"]
+	path = seL4/projects/util_libs
+	url = https://github.com/seL4/util_libs.git
+
+
+[submodule "seL4/projects/sel4test"]
+	path = seL4/projects/sel4test
+	url = https://github.com/seL4/sel4test.git
+
+
+[submodule "seL4/tools/polly"]
+	path = seL4/tools/polly
+	url = https://github.com/ruslo/polly.git
+
+
+[submodule "seL4/tools/seL4"]
+	path = seL4/tools/seL4
+	url = https://github.com/seL4/seL4_tools.git
+
+
+[submodule "seL4/tools/nanopb"]
+	path = seL4/tools/nanopb
+	url = https://github.com/nanopb/nanopb.git
+
