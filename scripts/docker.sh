@@ -5,7 +5,7 @@ YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-if [ ! -x $(command -v make)]; then
+if [ ! -x $(command -v make) ]; then
     echo -e "${RED}Error${NC}: make is not installed."
     exit 1
 fi
@@ -24,12 +24,13 @@ if ! groups | grep -qw docker; then
 fi
 
 root_dir=$(dirname $0)/..
+docker_path=$(realpath ${root_dir}/docker)
 cd ${root_dir}/docker
 
 # build docker image
 echo -e "${GREEN}Info${NC}: build docker image"
-make build_user
+make build_user_camkes
 
-echo $"alias container=\'make -C \$(pwd) user HOST_DIR=\$(pwd)\'" >> ~/.profile
+echo "alias container='make -C ${docker_path} HOST_DIR=\$(pwd) user'" >> ~/.profile
 source ~/.profile
 echo -e "${GREEN}Info${NC}: run 'container' to enter the docker container"
