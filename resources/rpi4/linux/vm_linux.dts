@@ -1340,6 +1340,12 @@
 				status = "okay";
 				phandle = <0x09>;
 			};
+		
+			reset: reset {
+				compatible = "raspberrypi,firmware-reset";
+				#reset-cells = <1>;
+				phandle = <0x25>;
+			};
 		};
 
 		// Broadcom VCHIQ firmware services to communicate with the VPU-side OS services
@@ -1401,7 +1407,10 @@
 		#address-cells = <0x02>;
 		#size-cells = <0x01>;
 		ranges = <0x00 0x7e000000 0x00 0xfe000000 0x1800000>;
-		dma-ranges = <0x00 0xc0000000 0x00000000 0x00 0x40000000>;
+		// bcm2711 B0 steps
+		// dma-ranges = <0x00 0xc0000000 0x00 0x00000000 0x40000000>;	
+		// bcm2711 C0 steps
+		dma-ranges = <0x00 0x00000000 0x00 0x00000000 0xfc000000>;	
 
 		emmc2@7e340000 {
 			compatible = "brcm,bcm2711-emmc2";
@@ -1474,7 +1483,7 @@
 
 				usb@0,0 {
 					reg = <0x10000 0x00 0x00 0x00 0x00>;
-					// resets = <0x25 0x00>;
+					resets = <0x25 0x00>;
 				};
 			};
 		};
