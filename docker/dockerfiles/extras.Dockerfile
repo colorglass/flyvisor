@@ -16,7 +16,7 @@ FROM $USER_BASE_IMG
 # dependencies:
 
 # hadolint ignore=DL3008,DL3009
-RUN sed -i 's/deb.debian.org/mirror.nju.edu.cn/g' /etc/apt/sources.list && 
+RUN sed -i 's/deb.debian.org/mirror.nju.edu.cn/g' /etc/apt/sources.list && \
     sed -i 's/security.debian.org/mirror.nju.edu.cn/g' /etc/apt/sources.list
 RUN apt-get update -q \
     && apt-get install -y --no-install-recommends \
