@@ -46,7 +46,10 @@ DefineCAmkESVMFileServer()
 
 CAmkESAddImportPath("conf/${PLATFORM}/")
 
-DeclareCAmkESRootserver(vm_linux.camkes
+DeclareCAmkESComponent(VM SOURCES modules/cross_vm_connections.c)
+DeclareCAmkESComponent(CrossvmInit SOURCES components/CrossvmInit/crossvm_init.c)
+
+DeclareCAmkESRootserver(vm_cross.camkes
     CPP_INCLUDES
     ${CAMKES_VM_DIR}/components/VM_Arm
 )

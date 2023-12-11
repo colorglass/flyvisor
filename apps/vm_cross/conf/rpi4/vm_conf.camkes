@@ -1,0 +1,71 @@
+#include "configurations/vm.h"
+
+#define VM_RAM_BASE 0x10000000
+#define VM_RAM_SIZE 0x20000000
+#define VM_KERNEL_ENTRY (VM_RAM_BASE + 0x80000)
+#define VM_DTB_ADDR 0x24000000
+#define VM_INITRD_ADDR 0x20000000
+
+assembly {
+    composition {}
+
+    // setting the configurations of VM component for current platform
+    configuration {
+        vm0.num_vcpus = 1;
+
+        vm0.vm_address_config = {
+            "ram_base" : VAR_STRINGIZE(VM_RAM_BASE),
+            "ram_paddr_base" : VAR_STRINGIZE(VM_RAM_BASE),
+            "ram_size" : VAR_STRINGIZE(VM_RAM_SIZE),
+            "dtb_addr" : VAR_STRINGIZE(VM_DTB_ADDR),
+            "initrd_addr" : VAR_STRINGIZE(VM_INITRD_ADDR),
+            "kernel_entry_addr" : VAR_STRINGIZE(VM_KERNEL_ENTRY),
+        };
+
+        vm0.vm_image_config = {
+            // image names in fileserver
+            "kernel_name" : "linux",
+            "dtb_name" : "linux-dtb",
+            "initrd_name" : "linux-initrd",
+
+            // used for dtb generation
+            "kernel_bootcmdline" : "root=/dev/mmcblk1p2 rootwait console=ttyS0,115200 earlycon=uart8250,mmio32,0xfe215040 8250.nr_uarts=1",
+            "kernel_stdout" : "",
+            "dtb_base_name" : "linux-dtb",
+
+            "provide_dtb" : true,
+            "generate_dtb" : true,
+            "provide_initrd" : false,
+            "clean_cache" : true,
+            "map_one_to_one" : true,
+        };
+
+        vm0.dtb = dtb([
+            {"path" : "/soc/timer@7e003000"},
+            {"path" : "/soc/cprman@7e101000"},
+            {"path" : "/soc/gpio@7e200000"},
+            {"path" : "/soc/aux@7e215000"},
+            {"path" : "/soc/serial@7e215040"},
+            {"path" : "/soc/sdhci@7e300000"},
+            {"path" : "/soc/avs-monitor@7d5d2000"},
+            {"path" : "/soc/dma@7e007000"},
+            {"path" : "/soc/rng@7e104000"},
+            {"path" : "/soc/mailbox@7e00b880"},
+            {"path" : "/soc/mailbox@7e00b840"},
+            {"path" : "/emmc2bus/emmc2@7e340000"},
+            {"path" : "/scb/pcie@7d500000"},
+            
+        ]);
+
+        vm0.dtb_irqs = [];
+
+        vm0.mmios = [];
+
+        vm0.untyped_mmios = [
+            "0xff846000:12",
+            "0x10000000:28",
+            "0x20000000:28",
+            "0x600000000:26",
+        ];
+    }
+}

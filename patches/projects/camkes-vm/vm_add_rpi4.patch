@@ -1,9 +1,22 @@
+diff --git a/components/VM_Arm/CMakeLists.txt b/components/VM_Arm/CMakeLists.txt
+index f88c608..075c56e 100644
+--- a/components/VM_Arm/CMakeLists.txt
++++ b/components/VM_Arm/CMakeLists.txt
+@@ -32,7 +32,7 @@ config_option(
+     VM_PCI_SUPPORT
+     "Enable virtual pci device support"
+     DEPENDS
+-    "KernelPlatformExynos5410 OR KernelPlatformExynos5422 OR KernelPlatformTx2 OR KernelPlatformQEMUArmVirt OR KernelPlatformOdroidc2 OR KernelPlatformZynqmp"
++    "KernelPlatformExynos5410 OR KernelPlatformExynos5422 OR KernelPlatformTx2 OR KernelPlatformQEMUArmVirt OR KernelPlatformOdroidc2 OR KernelPlatformZynqmp OR KernelPlatformRpi4"
+     DEFAULT
+     OFF
+ )
 diff --git a/components/VM_Arm/plat_include/bcm2711/plat/vmlinux.h b/components/VM_Arm/plat_include/bcm2711/plat/vmlinux.h
 new file mode 100644
-index 0000000..0bcfb08
+index 0000000..f3c892e
 --- /dev/null
 +++ b/components/VM_Arm/plat_include/bcm2711/plat/vmlinux.h
-@@ -0,0 +1,17 @@
+@@ -0,0 +1,35 @@
 +/*
 + * Copyright 2020, Data61, CSIRO (ABN 41 687 119 230)
 + *
@@ -12,12 +25,30 @@ index 0000000..0bcfb08
 +#pragma once
 +
 +#define IRQ_SPI_OFFSET 32
-+#define GIC_NODE_PATH  ""
++#define GIC_NODE_PATH  "/soc/interrupt-controller@40041000"
 +
 +static const int linux_pt_irqs[] = {};
 +
-+static const int free_plat_interrupts[] =  {};
-+static const char *plat_keep_devices[] = {};
++static const int free_plat_interrupts[] =  { 130 };
++
++static const char *plat_keep_devices[] = {
++    "/arm-pmu",
++    "/timer",
++    "/wifi-pwrseq",
++    "/sd_io_1v8_reg",
++    "/sd_vcc_reg",
++    "/phy",
++    "/clk-27M",
++    "/clk-108M",
++};
 +static const char *plat_keep_device_and_disable[] = {};
-+static const char *plat_keep_device_and_subtree[] = {};
++static const char *plat_keep_device_and_subtree[] = {
++    "/reserved-memory",
++    "/thermal-zones",
++    "/soc",
++    "/clocks",
++    "/emmc2bus",
++    "/scb",
++    "/leds",
++};
 +static const char *plat_keep_device_and_subtree_and_disable[] = {};
