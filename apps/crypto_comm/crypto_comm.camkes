@@ -1,0 +1,71 @@
+
+import <std_connector.camkes>;
+import <global-connectors.camkes>;
+import "components/rx/Rx.camkes";
+import "components/encrypt/Encrypt.camkes";
+import "components/decrypt/Decrypt.camkes";
+import "components/hwrng/HWrng.camkes";
+
+import <FileServer/FileServer.camkes>;
+
+component UARTs {
+    hardware;
+    dataport Buf(4096) reg;
+    emits UartIRQ irq;
+}
+
+component GPIO {
+    hardware;
+    dataport Buf(4096) reg;
+}
+
+assembly {
+    composition {
+        component UARTs uarts;
+        component GPIO gpio;
+
+        component Rx recv;
+        component Encrypt encrypt;
+        component Decrypt decrypt;
+
+        component HWRNG hwrng;
+        component FileServer fsrv;
+
+        connection seL4HardwareMMIO rx_uart_reg_conn(from recv.uart_reg, to uarts.reg);
+        connection seL4HardwareInterrupt rx_irq_conn(from uarts.irq, to recv.uart_irq);
+        connection seL4HardwareMMIO gpio_reg_conn(from recv.gpio_reg, to gpio.reg);
+
+        connection seL4HardwareMMIO encrypt_uart_reg_conn(from encrypt.uart_reg, to uarts.reg);
+        connection seL4HardwareMMIO decrypt_uart_reg_conn(from decrypt.uart_reg, to uarts.reg);
+
+        connection seL4SharedData recv_encrypt_buf_conn(from recv.encrypt_buf, to encrypt.recv_buf);
+        connection seL4SharedData recv_decrypt_buf_conn(from recv.decrypt_buf, to decrypt.recv_buf);
+
+        connection seL4Notification gcs_data_ready_conn(from recv.gcs_ready, to decrypt.gcs_ready);
+        connection seL4Notification fc_data_ready_conn(from recv.fc_ready, to encrypt.fc_ready);
+
+        connection seL4DTBHardware hwrng_dtb_conn(from hwrng.dtb_src, to hwrng.dtb);
+        connection seL4RPCCall rng_inf_decrypt_conn(from decrypt.rng, to hwrng.rng);
+        connection seL4RPCCall rng_inf_encrypt_conn(from encrypt.rng, to hwrng.rng);
+
+        connection seL4RPCDataport fs_decrypt_conn(from decrypt.fs, to fsrv.fs_ctrl);
+    }
+
+    configuration {
+        uarts.reg_paddr = 0xfe201000;
+        uarts.reg_size = 0x1000;
+        uarts.irq_irq_number = 153;
+        gpio.reg_paddr = 0xfe200000;
+        gpio.reg_size = 0x1000;
+        timer.reg_paddr = 0xfe003000;
+        timer.reg_size = 0x1000;
+
+        recv.priority = 254;
+        encrypt.priority = 253;
+        decrypt.priority = 253;
+        hwrng.priority = 254;
+
+        recv_encrypt_buf_conn.size = 8192;
+        recv_decrypt_buf_conn.size = 8192;
+    }
+}

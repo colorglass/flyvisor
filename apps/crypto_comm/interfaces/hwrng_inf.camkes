@@ -1,0 +1,4 @@
+procedure rng_inf {
+    include "stdint.h";
+    uint32_t rand_num(void);
+};

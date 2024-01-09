@@ -72,6 +72,12 @@
 	path = seL4/tools/nanopb
 	url = https://github.com/nanopb/nanopb.git
 
+
 [submodule "libs/mavlink2"]
 	path = libs/mavlink2
 	url = https://github.com/mavlink/c_library_v2.git
+
+
+[submodule "libs/GmSSL"]
+	path = libs/GmSSL
+	url = https://github.com/guanzhi/GmSSL.git

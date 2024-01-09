@@ -132,3 +132,12 @@ Adding `#address-cells = <0x2>;` to the gicv2 dt node just for irq parsing:
 			phandle = <0x01>;
 		};
 ```
+
+### pl011 uart of rpi4 not work
+When only init the uart devices, the uart not work.
+
+#### reason
+when adding `dtoverlay=uartx` to the `config.txt` file in boot sector of rpi4 image, the rpi4 firmware only modify the devicetree file to be passed into the next stage (linux kernel), it will not set the corresponed GPIO setting, and causes the gpio pins of the uart remain not set.
+
+#### solution
+manauly setting the gpio ping alt functions.

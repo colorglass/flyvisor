@@ -1,0 +1,322 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 41c02181..ba48a0a6 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -7,7 +7,7 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
+ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
+ SET(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH};${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+ 
+-include_directories(include)
++# include_directories(include)
+ 
+ set(src
+ 	src/version.c
+@@ -381,17 +381,18 @@ if (ENABLE_GMT_0105_RNG)
+ endif()
+ 
+ 
+-check_symbol_exists(getentropy "unistd.h" HAVE_GETENTROPY)
+-if (WIN32)
+-	list(APPEND src src/rand_win.c src/http_win.c)
+-elseif (APPLE)
+-	list(APPEND src src/rand_apple.c src/http.c)
+-elseif (HAVE_GETENTROPY)
+-	list(APPEND src src/rand_unix.c src/http.c)
+-	message(STATUS "have getentropy")
+-else()
+-	list(APPEND src src/rand.c src/http.c)
+-endif()
++# check_symbol_exists(getentropy "unistd.h" HAVE_GETENTROPY)
++# if (WIN32)
++# 	list(APPEND src src/rand_win.c src/http_win.c)
++# elseif (APPLE)
++# 	list(APPEND src src/rand_apple.c src/http.c)
++# elseif (HAVE_GETENTROPY)
++# 	list(APPEND src src/rand_unix.c src/http.c)
++# 	message(STATUS "have getentropy")
++# else()
++# 	list(APPEND src src/rand.c src/http.c)
++# endif()
++list(APPEND src src/rand_sel4.c src/http.c)
+ 
+ 
+ option(ENABLE_HTTP_TESTS "Enable HTTP GET/POST related tests" OFF)
+@@ -401,114 +402,115 @@ if (ENABLE_HTTP_TESTS)
+ endif()
+ 
+ 
+-option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
++option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
+ 
+ if (CMAKE_C_COMPILER_ID MATCHES "MSVC")
+ 	message(STATUS "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS")
+ 	set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON) # set before add_library
+ endif()
+ 
+-add_library(gmssl ${src})
+-
+-
+-
+-
+-
+-if (WIN32)
+-	target_link_libraries(gmssl -lws2_32)
+-elseif (APPLE)
+-	target_link_libraries(gmssl dl)
+-	target_link_libraries(gmssl "-framework Security")
+-	#target_link_libraries(gmssl "-framework CoreFoundation") # rand_apple.c CFRelease()
+-elseif (MINGW)
+-	target_link_libraries(gmssl PRIVATE wsock32)
+-else()
+-	target_link_libraries(gmssl dl)
+-endif()
+-
+-
+-set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+-
+-SET_TARGET_PROPERTIES(gmssl PROPERTIES VERSION 3.1 SOVERSION 3)
+-
+-
+-install(TARGETS gmssl ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
+-install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/gmssl DESTINATION include)
+-
+-
+-option(ENABLE_SOFT_SDF "Enable Software SDF Implementation" OFF)
+-if (ENABLE_SOFT_SDF)
+-	message(STATUS "ENABLE_SOFT_SDF is ON")
+-	add_library(soft_sdf SHARED src/sdf/soft_sdf.c)
+-	target_link_libraries(soft_sdf PRIVATE gmssl)
+-	set_target_properties(soft_sdf PROPERTIES VERSION 3.1 SOVERSION 3)
+-endif()
+-
+-
+-if (NOT ${CMAKE_SYSTEM_NAME} STREQUAL "iOS")
+-
+-	add_library(sdf_dummy SHARED src/sdf/sdf_dummy.c)
+-	set_target_properties(sdf_dummy PROPERTIES VERSION 3.1 SOVERSION 3)
+-
+-	add_library(skf_dummy SHARED src/skf/skf_dummy.c)
+-	set_target_properties(skf_dummy PROPERTIES VERSION 3.1 SOVERSION 3)
+-
+-	add_executable(gmssl-bin ${tools})
+-	target_link_libraries(gmssl-bin LINK_PUBLIC gmssl)
+-	set_target_properties(gmssl-bin PROPERTIES RUNTIME_OUTPUT_NAME gmssl)
+-	if (MINGW)
+-		target_link_libraries(gmssl-bin PRIVATE Ws2_32)
+-	endif()
+-
+-	enable_testing()
+-	foreach(name ${tests})
+-		add_test(NAME ${name} COMMAND ${name}test)
+-		add_executable(${name}test tests/${name}test.c)
+-		target_link_libraries (${name}test LINK_PUBLIC gmssl)
+-	endforeach()
+-
+-	install(TARGETS gmssl-bin RUNTIME DESTINATION bin)
+-endif()
+-
+-if (CMAKE_C_COMPILER_ID MATCHES "MSVC")
+-	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT gmssl-bin)
+-	set(CMAKE_INSTALL_PREFIX "C:/Program Files/GmSSL") # change by `cmake -DCMAKE_INSTALL_PREFIX=C:\path\to\install`
+-	# run `set path=%path%;C:\Program Files\GmSSL\bin`
+-	add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+-
+-	target_compile_options(gmssl PRIVATE /utf-8)
+-	target_compile_options(gmssl-bin PRIVATE /utf-8)
+-
+-#	target_compile_options(gmssl PRIVATE /wd4996)
+-#	target_compile_options(gmssl-bin PRIVATE /wd4996)
+-endif()
+-
+-# cmake .. -DENABLE_DEMOS=ON
+-option(ENABLE_DEMOS "Build demos" OFF)
+-if (ENABLE_DEMOS)
+-	message(STATUS "ENABLE_DEMOS is ON")
+-	foreach(name ${demos})
+-		add_executable(${name} demos/src/${name}.c)
+-		target_link_libraries(${name} gmssl)
+-	endforeach()
+-endif()
+-
+-# Generate install package with cpack
+-#	cpack -G TGZ
+-#	cpack -G STGZ
+-#	cpack -G NSIS64 # Windows only
+-#
+-# Install the STGZ package
+-#	./GmSSL-<version>-Linux.sh --prefix=/usr/local
+-#
+-set(CPACK_PACKAGE_NAME "GmSSL")
+-set(CPACK_PACKAGE_VENDOR "GmSSL develop team")
+-set(CPACK_PACKAGE_VERSION "3.1.2-Dev")
+-set(CPACK_PACKAGE_DESCRIPTION_FILE ${PROJECT_SOURCE_DIR}/README.md)
+-string(CONCAT CPACK_PACKAGE_DESCRIPTION_SUMMARY
+-    "GmSSL is an open source cryptographic toolbox that supports SM2 / SM3 / SM4 / SM9 "
+-    "and other national secret (national commercial password) algorithm. ")
+-set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
+-set(CPACK_NSIS_MODIFY_PATH ON)
+-include(CPack)
++add_library(gmssl STATIC ${src})
++target_link_libraries(gmssl muslc)
++target_include_directories(gmssl PUBLIC include)
++
++
++
++
++# if (WIN32)
++# 	target_link_libraries(gmssl -lws2_32)
++# elseif (APPLE)
++# 	target_link_libraries(gmssl dl)
++# 	target_link_libraries(gmssl "-framework Security")
++# 	#target_link_libraries(gmssl "-framework CoreFoundation") # rand_apple.c CFRelease()
++# elseif (MINGW)
++# 	target_link_libraries(gmssl PRIVATE wsock32)
++# else()
++# 	target_link_libraries(gmssl dl)
++# endif()
++
++
++# set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
++
++# SET_TARGET_PROPERTIES(gmssl PROPERTIES VERSION 3.1 SOVERSION 3)
++
++
++# install(TARGETS gmssl ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
++# install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/gmssl DESTINATION include)
++
++
++# option(ENABLE_SOFT_SDF "Enable Software SDF Implementation" OFF)
++# if (ENABLE_SOFT_SDF)
++# 	message(STATUS "ENABLE_SOFT_SDF is ON")
++# 	add_library(soft_sdf SHARED src/sdf/soft_sdf.c)
++# 	target_link_libraries(soft_sdf PRIVATE gmssl)
++# 	set_target_properties(soft_sdf PROPERTIES VERSION 3.1 SOVERSION 3)
++# endif()
++
++
++# if (NOT ${CMAKE_SYSTEM_NAME} STREQUAL "iOS")
++
++# 	add_library(sdf_dummy SHARED src/sdf/sdf_dummy.c)
++# 	set_target_properties(sdf_dummy PROPERTIES VERSION 3.1 SOVERSION 3)
++
++# 	add_library(skf_dummy SHARED src/skf/skf_dummy.c)
++# 	set_target_properties(skf_dummy PROPERTIES VERSION 3.1 SOVERSION 3)
++
++# 	add_executable(gmssl-bin ${tools})
++# 	target_link_libraries(gmssl-bin LINK_PUBLIC gmssl)
++# 	set_target_properties(gmssl-bin PROPERTIES RUNTIME_OUTPUT_NAME gmssl)
++# 	if (MINGW)
++# 		target_link_libraries(gmssl-bin PRIVATE Ws2_32)
++# 	endif()
++
++# 	enable_testing()
++# 	foreach(name ${tests})
++# 		add_test(NAME ${name} COMMAND ${name}test)
++# 		add_executable(${name}test tests/${name}test.c)
++# 		target_link_libraries (${name}test LINK_PUBLIC gmssl)
++# 	endforeach()
++
++# 	install(TARGETS gmssl-bin RUNTIME DESTINATION bin)
++# endif()
++
++# if (CMAKE_C_COMPILER_ID MATCHES "MSVC")
++# 	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT gmssl-bin)
++# 	set(CMAKE_INSTALL_PREFIX "C:/Program Files/GmSSL") # change by `cmake -DCMAKE_INSTALL_PREFIX=C:\path\to\install`
++# 	# run `set path=%path%;C:\Program Files\GmSSL\bin`
++# 	add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
++
++# 	target_compile_options(gmssl PRIVATE /utf-8)
++# 	target_compile_options(gmssl-bin PRIVATE /utf-8)
++
++# #	target_compile_options(gmssl PRIVATE /wd4996)
++# #	target_compile_options(gmssl-bin PRIVATE /wd4996)
++# endif()
++
++# # cmake .. -DENABLE_DEMOS=ON
++# option(ENABLE_DEMOS "Build demos" OFF)
++# if (ENABLE_DEMOS)
++# 	message(STATUS "ENABLE_DEMOS is ON")
++# 	foreach(name ${demos})
++# 		add_executable(${name} demos/src/${name}.c)
++# 		target_link_libraries(${name} gmssl)
++# 	endforeach()
++# endif()
++
++# # Generate install package with cpack
++# #	cpack -G TGZ
++# #	cpack -G STGZ
++# #	cpack -G NSIS64 # Windows only
++# #
++# # Install the STGZ package
++# #	./GmSSL-<version>-Linux.sh --prefix=/usr/local
++# #
++# set(CPACK_PACKAGE_NAME "GmSSL")
++# set(CPACK_PACKAGE_VENDOR "GmSSL develop team")
++# set(CPACK_PACKAGE_VERSION "3.1.2-Dev")
++# set(CPACK_PACKAGE_DESCRIPTION_FILE ${PROJECT_SOURCE_DIR}/README.md)
++# string(CONCAT CPACK_PACKAGE_DESCRIPTION_SUMMARY
++#     "GmSSL is an open source cryptographic toolbox that supports SM2 / SM3 / SM4 / SM9 "
++#     "and other national secret (national commercial password) algorithm. ")
++# set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
++# set(CPACK_NSIS_MODIFY_PATH ON)
++# include(CPack)
+ 
+diff --git a/include/gmssl/rand.h b/include/gmssl/rand.h
+index 86f5b05a..395549d7 100644
+--- a/include/gmssl/rand.h
++++ b/include/gmssl/rand.h
+@@ -22,6 +22,7 @@ extern "C" {
+ 
+ #define RAND_BYTES_MAX_SIZE	(256)
+ 
++_gmssl_export int gmssl_rand_seed_init(int seed);
+ _gmssl_export int rand_bytes(uint8_t *buf, size_t buflen);
+ 
+ 
+diff --git a/src/rand_sel4.c b/src/rand_sel4.c
+new file mode 100644
+index 00000000..b6a37dcb
+--- /dev/null
++++ b/src/rand_sel4.c
+@@ -0,0 +1,41 @@
++/*
++ *  Copyright 2014-2022 The GmSSL Project. All Rights Reserved.
++ *
++ *  Licensed under the Apache License, Version 2.0 (the License); you may
++ *  not use this file except in compliance with the License.
++ *
++ *  http://www.apache.org/licenses/LICENSE-2.0
++ */
++
++
++
++#include <stdio.h>
++#include <string.h>
++#include <stdlib.h>
++#include <stdint.h>
++#include <gmssl/rand.h>
++#include <gmssl/error.h>
++
++static int rand_seed = 0;
++
++int gmssl_rand_seed_init(int seed) {
++    rand_seed = seed;
++    srand(rand_seed);
++    return 1;
++}
++
++int rand_bytes(uint8_t *buf, size_t len)
++{
++	if (!buf) {
++		error_print();
++		return -1;
++	}
++    if(!rand_seed) {
++        error_print();
++        return -1;
++    }
++    for(int i = 0; i < len; i++) {
++        buf[i] = rand() & 0xff;
++    }
++	return 1;
++}

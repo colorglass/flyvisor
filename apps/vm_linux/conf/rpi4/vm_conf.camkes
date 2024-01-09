@@ -54,6 +54,7 @@ assembly {
             {"path" : "/soc/mailbox@7e00b840"},
             {"path" : "/emmc2bus/emmc2@7e340000"},
             {"path" : "/scb/pcie@7d500000"},
+            {"path" : "/soc/serial@7e201800"},
             
         ]);
 
