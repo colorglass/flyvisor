@@ -103,3 +103,30 @@ static inline void uart_putchar(volatile struct pl011_regs *uart, char c)
         ;
     uart->dr = c;
 }
+
+#define HEADER_MAGIC 0xe7
+#define PACKAGE_MAX_DATA_LEN 288
+
+enum package_fun {
+    REQUEST_CONN = 0x01,
+    REQUEST_AUTH = 0x02,
+    DATA = 0x04,
+    RESPONSE_OK = 0x10,
+    RESPONSE_ERROR = 0x20,
+};
+
+enum package_response_error {
+    ERROR_CRC = 0x01,
+    ERROR_FUN = 0x02,
+    ERROR_AUTH = 0x04,
+    ERROR_CONN = 0x08,
+    ERROR_PUBKEY = 0x10,
+};
+
+struct encrypt_package {
+    uint8_t magic;
+    uint8_t len;
+    uint8_t fun;
+    uint16_t crc;
+    uint8_t data[PACKAGE_MAX_DATA_LEN];
+} __attribute__((packed));

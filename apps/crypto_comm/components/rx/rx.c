@@ -73,13 +73,10 @@ static void uart_init(volatile struct pl011_regs *uart)
 
 void uart_irq_handle(void)
 {
-
     if(gcs_uart->mis & (BIT(4) | BIT(6))) {
         gcs_uart->icr = BIT(4) | BIT(6);
         while(!(gcs_uart->fr & BIT(4))) {
-            uint8_t c = gcs_uart->dr;
-            printf("%02x ", c);
-            ring_buffer_put(decrypt_buf, c);
+            ring_buffer_put(decrypt_buf, gcs_uart->dr);
         }
         gcs_ready_emit();
     }

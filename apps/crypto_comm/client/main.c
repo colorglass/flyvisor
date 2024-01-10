@@ -8,23 +8,32 @@
 #include <gmssl/sm4.h>
 #include <gmssl/sm3.h>
 #include <gmssl/sm2.h>
+#include "checksum.h"
 
 #define HEADER_MAGIC 0xe7
 #define PACKAGE_MAX_DATA_LEN 288
 
-enum package_fun
-{
+enum package_fun {
     REQUEST_CONN = 0x01,
     REQUEST_AUTH = 0x02,
     DATA = 0x04,
-    RESPONSE = 0x10,
+    RESPONSE_OK = 0x10,
+    RESPONSE_ERROR = 0x20,
 };
 
-struct encrypt_package
-{
+enum package_response_error {
+    ERROR_CRC = 0x01,
+    ERROR_FUN = 0x02,
+    ERROR_AUTH = 0x04,
+    ERROR_CONN = 0x08,
+    ERROR_PUBKEY = 0x10,
+};
+
+struct encrypt_package {
     uint8_t magic;
     uint8_t len;
     uint8_t fun;
+    uint16_t crc;
     uint8_t data[PACKAGE_MAX_DATA_LEN];
 } __attribute__((packed));
 
@@ -86,11 +95,11 @@ void set_blocking(int fd, int should_block)
 
 int wait_for_response(int port, struct encrypt_package *package)
 {
-    uint8_t buf[PACKAGE_MAX_DATA_LEN + 3];
+    uint8_t buf[PACKAGE_MAX_DATA_LEN + 5];
     int len = 0;
-    while (len < 3)
+    while (len < 5)
     {
-        int n = read(port, buf + len, 3 - len);
+        int n = read(port, buf + len, 5 - len);
         if (n < 0)
         {
             printf("error %d from read: %s", errno, strerror(errno));
@@ -108,9 +117,9 @@ int wait_for_response(int port, struct encrypt_package *package)
         printf("error: invalid fun\n");
         return -1;
     }
-    while (len < buf[1] + 3)
+    while (len < buf[1] + 5)
     {
-        int n = read(port, buf + len, buf[1] + 3 - len);
+        int n = read(port, buf + len, buf[1] + 5 - len);
         if (n < 0)
         {
             printf("error %d from read: %s", errno, strerror(errno));
@@ -119,7 +128,54 @@ int wait_for_response(int port, struct encrypt_package *package)
         len += n;
     }
     memcpy(package, buf, len);
-    return buf[2] & RESPONSE ? 0 : -1;
+    return buf[2];
+}
+
+static inline void send_package(int port, struct encrypt_package* package)
+{ 
+    write(port, (void*)package, package->len + 5);
+}
+
+static void create_package(struct encrypt_package* package,enum package_fun fun, uint8_t* data, uint8_t len)
+{
+    package->magic = HEADER_MAGIC;
+    package->len = len;
+    package->fun = fun;
+    package->crc = 0;
+    memcpy(package->data, data, len);
+
+    uint16_t crc_cal = crc_calculate((uint8_t*)package, package->len + 5);
+    package->crc = crc_cal;
+}
+
+static int verify_package(struct encrypt_package* package)
+{
+    uint16_t crc = 0;
+    uint16_t crc_cal = 0;
+
+    crc = package->crc;
+    package->crc = 0;
+    crc_cal = crc_calculate((uint8_t*)package, package->len + 5);
+    package->crc = crc;
+
+    return crc == crc_cal;
+}
+
+static void package_print_error(struct encrypt_package* package)
+{
+    uint8_t error = package->data[0];
+    printf("error: ");
+    if(error & ERROR_CRC)
+        printf("crc ");
+    if(error & ERROR_FUN)
+        printf("fun ");
+    if(error & ERROR_AUTH)
+        printf("auth ");
+    if(error & ERROR_CONN)
+        printf("conn ");
+    if(error & ERROR_PUBKEY)
+        printf("pubkey ");
+    printf("\n");
 }
 
 SM4_KEY sm4_encrypt_key;
@@ -133,25 +189,29 @@ static size_t encrypt_buffer_len;
 static uint8_t buffer[256];
 static size_t buffer_len;
 
-int do_connection(int port)
+int do_connection(int port,struct encrypt_package* package, char* private_key_path)
 {
     SM2_KEY sm2_key_pair;
     uint8_t public_key[65];
+    uint16_t crc = 0;
+    int ret;
 
     sm2_key_generate(&sm2_key_pair);
     sm2_point_to_uncompressed_octets(&sm2_key_pair.public_key, public_key);
 
-    struct encrypt_package *package;
-    package = (struct encrypt_package *)malloc(sizeof(struct encrypt_package));
-    package->magic = HEADER_MAGIC;
-    package->len = 65;
-    package->fun = REQUEST_CONN;
-    memcpy(package->data, public_key, 65);
+    create_package(package, REQUEST_CONN, public_key, 65);
+    send_package(port, package);
 
-    write(port, (void *)package, package->len + 3);
-    if (wait_for_response(port, package))
-    {
-        printf("error: connection failed\n");
+    ret = wait_for_response(port, package);
+    if(!verify_package(package)) {
+        printf("error: conn response crc error\n");
+        return -1;
+    }
+
+    if(ret != RESPONSE_OK) {
+        printf("error: conn response error\n");
+        if(ret == RESPONSE_ERROR)
+            package_print_error(package);
         return -1;
     }
 
@@ -170,25 +230,30 @@ int do_connection(int port)
 
     printf("connection established\n");
 
+    // sm3_hash(psk##public_key)
     char *public_key_path = "9ccf9c5d";
     sm4_cbc_padding_encrypt(&sm4_encrypt_key, iv, (uint8_t *)public_key_path, strlen(public_key_path), encrypt_buffer, &encrypt_buffer_len);
 
-    package->magic = HEADER_MAGIC;
-    package->len = encrypt_buffer_len;
-    package->fun = REQUEST_AUTH;
-    memcpy(package->data, encrypt_buffer, encrypt_buffer_len);
-    write(port, (void *)package, package->len + 3);
+    create_package(package, REQUEST_AUTH, encrypt_buffer, encrypt_buffer_len);
+    send_package(port, package);
 
-    if (wait_for_response(port, package))
-    {
-        printf("error: auth failed\n");
+    ret = wait_for_response(port, package);
+    if(!verify_package(package)) {
+        printf("error: auth response crc error\n");
+        return -1;
+    }
+
+    if(ret != RESPONSE_OK) {
+        printf("error: auth response error\n");
+        if(ret == RESPONSE_ERROR)
+            package_print_error(package);
         return -1;
     }
 
     sm4_cbc_padding_decrypt(&sm4_decrypt_key, iv, package->data, package->len, decrypt_buffer, &decrypt_buffer_len);
 
     SM2_KEY sm2_private_key;
-    FILE *fp = fopen("private_key.pem", "r");
+    FILE *fp = fopen(private_key_path, "r");
     if (!fp)
     {
         printf("error: cannot open private key file\n");
@@ -206,23 +271,25 @@ int do_connection(int port)
     uint32_t rand_num = *(uint32_t *)buffer;
     printf("get random number: %08x\n", rand_num);
 
-    uint8_t temp[36];
-    memcpy(temp, &rand_num, 4);
-    memcpy(temp + 4, shared_secret_key, 32);
+    memcpy(buffer + 4, shared_secret_key, 32);
 
     uint8_t digest[32];
-    sm3_digest(temp, 36, digest);
+    sm3_digest(buffer, 36, digest);
 
     sm4_cbc_padding_encrypt(&sm4_encrypt_key, iv, digest, 32, encrypt_buffer, &encrypt_buffer_len);
-    package->magic = HEADER_MAGIC;
-    package->len = encrypt_buffer_len;
-    package->fun = REQUEST_AUTH;
-    memcpy(package->data, encrypt_buffer, encrypt_buffer_len);
-    write(port, (void *)package, package->len + 3);
+    create_package(package, REQUEST_AUTH, encrypt_buffer, encrypt_buffer_len);
+    send_package(port, package);
 
-    if (wait_for_response(port, package))
-    {
-        printf("error: auth failed 1\n");
+    ret = wait_for_response(port, package);
+    if(!verify_package(package)) {
+        printf("error: auth response crc error\n");
+        return -1;
+    }
+
+    if(ret != RESPONSE_OK) {
+        printf("error: auth response error\n");
+        if(ret == RESPONSE_ERROR)
+            package_print_error(package);
         return -1;
     }
 
@@ -230,9 +297,17 @@ int do_connection(int port)
     return 0;
 }
 
-char *portname = "/dev/ttyUSB0";
-int main()
+char *portname;
+int main(int argc, char** argv)
 {
+    char *portname, *private_key_path;
+    if(argc != 3) {
+        printf("usage: %s <port> <private_key_path>\n", argv[0]);
+        return -1;
+    }
+    portname = argv[1];
+    private_key_path = argv[2];
+
     int fd = open(portname, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0)
     {
@@ -242,19 +317,25 @@ int main()
     set_interface_attribs(fd, B115200, 0);
     set_blocking(fd, 0);
 
-    if (do_connection(fd))
+    struct encrypt_package *package;
+    package = (struct encrypt_package *)malloc(sizeof(struct encrypt_package));
+    if(!package) {
+        printf("error: malloc failed\n");
+        return -1;
+    }
+
+    if (do_connection(fd, package, private_key_path))
     {
         printf("error: connection failed\n");
         return -1;
     }
 
-    char *str = "Hello World!";
-    sm4_cbc_padding_encrypt(&sm4_encrypt_key, iv, str, strlen(str), encrypt_buffer, &encrypt_buffer_len);
-    struct encrypt_package *package;
-    package = (struct encrypt_package *)malloc(sizeof(struct encrypt_package));
-    package->magic = HEADER_MAGIC;
-    package->len = encrypt_buffer_len;
-    package->fun = DATA;
-    memcpy(package->data, encrypt_buffer, encrypt_buffer_len);
-    write(fd, (void *)package, package->len + 3);
+    while(1) {
+        fgets(buffer, sizeof(buffer), stdin);
+        buffer[strlen(buffer) - 1] = '\0';
+        sm4_cbc_padding_encrypt(&sm4_encrypt_key, iv, buffer, strlen(buffer), encrypt_buffer, &encrypt_buffer_len);
+        create_package(package, DATA, encrypt_buffer, encrypt_buffer_len);
+        send_package(fd, package);
+    }
+    free(package);
 }

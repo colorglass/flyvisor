@@ -13,6 +13,7 @@ camkes_tool_setup_camkes_build_environment()
 sel4_projects_libs_import_libraries()
 global_components_import_project()
 
+# create cpio archive file and file server, in which the public keys are stored
 include(cpio)
 file(GLOB public_keys "${CMAKE_CURRENT_SOURCE_DIR}/public_keys/*")
 MakeCPIO(cpio_keys.o "${public_keys}")
@@ -22,20 +23,26 @@ DeclareCAmkESComponent(FileServer LIBS cpio_archive)
 
 add_subdirectory(${libs_dir}/GmSSL libgmssl)
 
+CAmkESAddImportPath(interfaces components)
 
 DeclareCAmkESComponent(Rx 
     SOURCES components/rx/rx.c 
     INCLUDES include
 )
-DeclareCAmkESComponent(Encrypt 
-    SOURCES components/encrypt/encrypt.c 
-    INCLUDES include 
-    LIBS gmssl
-)
+# DeclareCAmkESComponent(Crypto
+#     SOURCES components/crypto/crypto.c
+#     INCLUDES include
+#     LIBS gmssl
+# )
 DeclareCAmkESComponent(Decrypt 
     SOURCES components/decrypt/decrypt.c 
     INCLUDES include ${libs_dir}
     LIBS gmssl FileServer-client
+)
+DeclareCAmkESComponent(Encrypt 
+    SOURCES components/encrypt/encrypt.c 
+    INCLUDES include ${libs_dir}
+    LIBS gmssl
 )
 DeclareCAmkESComponent(HWRNG
     SOURCES components/hwrng/hwrng.c 

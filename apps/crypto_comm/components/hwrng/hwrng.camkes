@@ -1,0 +1,12 @@
+import <hwrng_inf.camkes>;
+
+component HWRNG {
+    emits __dtb dtb_src;
+    consumes __dtb dtb;
+    provides hwrng_inf rng;
+
+    composition {}
+    configuration {
+        dtb.dtb = dtb({"path" : "/soc/rng@7e104000"});
+    }
+}

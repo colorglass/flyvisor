@@ -1,10 +1,11 @@
 
 import <std_connector.camkes>;
 import <global-connectors.camkes>;
-import "components/rx/Rx.camkes";
-import "components/encrypt/Encrypt.camkes";
-import "components/decrypt/Decrypt.camkes";
-import "components/hwrng/HWrng.camkes";
+import <rx/rx.camkes>;
+import <decrypt/Decrypt.camkes>;
+import <encrypt/Encrypt.camkes>;
+//import <crypto/crypto.camkes>;
+import <hwrng/hwrng.camkes>;
 
 import <FileServer/FileServer.camkes>;
 
@@ -27,6 +28,7 @@ assembly {
         component Rx recv;
         component Encrypt encrypt;
         component Decrypt decrypt;
+        //component Crypto crypto;
 
         component HWRNG hwrng;
         component FileServer fsrv;
@@ -44,11 +46,15 @@ assembly {
         connection seL4Notification gcs_data_ready_conn(from recv.gcs_ready, to decrypt.gcs_ready);
         connection seL4Notification fc_data_ready_conn(from recv.fc_ready, to encrypt.fc_ready);
 
+        // hwrng
         connection seL4DTBHardware hwrng_dtb_conn(from hwrng.dtb_src, to hwrng.dtb);
         connection seL4RPCCall rng_inf_decrypt_conn(from decrypt.rng, to hwrng.rng);
         connection seL4RPCCall rng_inf_encrypt_conn(from encrypt.rng, to hwrng.rng);
+        //connection seL4RPCCall rng_inf_crypto_conn(from crypto.rng, to hwrng.rng);
 
         connection seL4RPCDataport fs_decrypt_conn(from decrypt.fs, to fsrv.fs_ctrl);
+
+        //connection seL4RPCDataport crypto_sm_conn(from recv.sm, to crypto.sm);
     }
 
     configuration {

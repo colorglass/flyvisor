@@ -1,4 +1,4 @@
-import "../../interfaces/hwrng_inf.camkes";
+import <hwrng_inf.camkes>;
 
 component Encrypt {
     include "crypto/ring_buffer.h";
@@ -7,5 +7,5 @@ component Encrypt {
     dataport ring_buffer_t recv_buf;
     consumes FC_data_ready fc_ready;
 
-    uses rng_inf rng;
+    uses hwrng_inf rng;
 }
