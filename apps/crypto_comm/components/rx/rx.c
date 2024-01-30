@@ -2,15 +2,37 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <utils/util.h>
+#include <utils/frequency.h>
 
 #include <crypto/global.h>
 #include <crypto/ring_buffer.h>
 
 static volatile struct pl011_regs *gcs_uart;
 static volatile struct pl011_regs *fc_uart;
+static volatile struct timer_regs *timer_regs;
 
-void *uart_reg_translate_paddr(uintptr_t paddr, size_t size);
-void *gpio_reg_translate_paddr(uintptr_t paddr, size_t size);
+extern void *uart_reg_translate_paddr(uintptr_t paddr, size_t size);
+extern void *gpio_reg_translate_paddr(uintptr_t paddr, size_t size);
+extern void *timer_reg_translate_paddr(uintptr_t paddr, size_t size);
+
+extern ring_buffer_t *gcs_msg_buf;
+extern ring_buffer_t *fc_msg_buf;
+
+static inline uint32_t timer_get_ms()
+{
+    uint64_t tick = timer_regs->clo | ((uint64_t)timer_regs->chi << 32);
+    return (uint32_t)(freq_cycles_and_hz_to_ns(tick, TIMER_FREQ) / NS_IN_MS);
+}
+
+static inline void timer_set_timeout(uint32_t ms)
+{
+    if(timer_regs->cs & 0x1)
+        timer_regs->cs = 0x1;
+
+    uint32_t tick = timer_regs->clo;
+    uint32_t timeout = tick + (uint32_t)freq_ns_and_hz_to_cycles(ms * NS_IN_MS, TIMER_FREQ);
+    timer_regs->c0 = timeout;
+}
 
 static void uart_gpio_configure(int tx_pin, int rx_pin, int alt)
 {
@@ -30,9 +52,8 @@ static void uart_gpio_configure(int tx_pin, int rx_pin, int alt)
     gpio->gppud[rx_pin / 16] |= GPIO_UART_RX_PULL << ((rx_pin % 16) * 2);
 }
 
-static void uart_init(volatile struct pl011_regs *uart)
+static void uart_init(volatile struct pl011_regs *uart, uint32_t baud_rate)
 {
-    const uint32_t baud_rate = 115200;
     const uint32_t uart_clock = 48000000;
     const uint32_t ibrd = uart_clock / (16 * baud_rate);
     const uint32_t fbrd = (uint32_t)((float)(uart_clock % (16 * baud_rate)) / (float)(16 * baud_rate) * 64 + 0.5);
@@ -76,15 +97,16 @@ void uart_irq_handle(void)
     if(gcs_uart->mis & (BIT(4) | BIT(6))) {
         gcs_uart->icr = BIT(4) | BIT(6);
         while(!(gcs_uart->fr & BIT(4))) {
-            ring_buffer_put(decrypt_buf, gcs_uart->dr);
+            ring_buffer_put(gcs_msg_buf, gcs_uart->dr);
         }
         gcs_ready_emit();
+        timer_set_timeout(5 * MS_IN_S);
     }
 
     if(fc_uart->mis & (BIT(4) | BIT(6))) {
         fc_uart->icr = BIT(4) | BIT(6);
         while(!(fc_uart->fr & BIT(4)))
-            ring_buffer_put(encrypt_buf, fc_uart->dr);
+            ring_buffer_put(fc_msg_buf, fc_uart->dr);
         fc_ready_emit();
     }
 
@@ -93,16 +115,30 @@ void uart_irq_handle(void)
     uart_irq_acknowledge();
 }
 
+void timer_irq_handle()
+{
+    if(timer_regs->cs & 0x1) {
+        timer_regs->cs = 0x1;
+        data_timeout_emit();
+        timer_set_timeout(1 * MS_IN_MINUTE);
+    }
+
+    timer_irq_acknowledge();
+}
+
 int run()
 {
-    ring_buffer_init(encrypt_buf, ENCRYPT_BUFFER_SIZE);
-    ring_buffer_init(decrypt_buf, DECRYPT_BUFFER_SIZE);
+    ring_buffer_init(gcs_msg_buf, MSG_BUFFER_SIZE);
+    ring_buffer_init(fc_msg_buf, MSG_BUFFER_SIZE);
 
     uart_gpio_configure(GCS_UART_TX_PIN, GCS_UART_RX_PIN, GCS_UART_PIN_ALT);
     uart_gpio_configure(FC_UART_TX_PIN, FC_UART_RX_PIN, FC_UART_PIN_ALT);
     gcs_uart = uart_reg_translate_paddr(GCS_UART_PADDR, 0x200);
     fc_uart = uart_reg_translate_paddr(FC_UART_PADDR, 0x200);
-    uart_init(gcs_uart);
-    uart_init(fc_uart);
+    uart_init(gcs_uart, 57600);
+    uart_init(fc_uart, 57600);
+
+    timer_regs = timer_reg_translate_paddr(TIMER_ADDR, 0x1000);
+
     return 0;
 }

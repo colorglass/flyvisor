@@ -1,0 +1,23 @@
+import <hwrng_inf.camkes>;
+import <FileServerInterface.camkes>;
+
+component Server{
+    control;
+
+    // hardwares
+    dataport Buf(4096) uart_reg;
+
+    // rx receive data buffer
+    include "crypto/ring_buffer.h";
+    dataport ring_buffer_t gcs_msg_buf;
+    dataport ring_buffer_t fc_msg_buf;
+
+    // data sync signal
+    consumes GCS_data_ready gcs_ready;
+    consumes FC_data_ready fc_ready;
+    consumes Timeout data_timeout;
+
+    // required interface
+    uses hwrng_inf rng;
+    uses FileServerInterface fs;
+}

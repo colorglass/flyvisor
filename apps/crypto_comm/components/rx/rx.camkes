@@ -1,15 +1,15 @@
-//import <crypto_inf.camkes>;
 
 component Rx {
     include "crypto/ring_buffer.h";
     control;
     consumes UartIRQ uart_irq;
+    consumes TimerIRQ timer_irq;
     dataport Buf(4096) uart_reg;
     dataport Buf(4096) gpio_reg;
-    dataport ring_buffer_t encrypt_buf;
-    dataport ring_buffer_t decrypt_buf;
+    dataport Buf(4096) timer_reg;
+    dataport ring_buffer_t gcs_msg_buf;
+    dataport ring_buffer_t fc_msg_buf;
     emits GCS_data_ready gcs_ready;
     emits FC_data_ready fc_ready;
-
-    //maybe uses crypto_inf sm;
+    emits Timeout data_timeout;
 }

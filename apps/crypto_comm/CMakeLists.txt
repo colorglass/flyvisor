@@ -29,20 +29,10 @@ DeclareCAmkESComponent(Rx
     SOURCES components/rx/rx.c 
     INCLUDES include
 )
-# DeclareCAmkESComponent(Crypto
-#     SOURCES components/crypto/crypto.c
-#     INCLUDES include
-#     LIBS gmssl
-# )
-DeclareCAmkESComponent(Decrypt 
-    SOURCES components/decrypt/decrypt.c 
+DeclareCAmkESComponent(Server
+    SOURCES components/server/server.c
     INCLUDES include ${libs_dir}
-    LIBS gmssl FileServer-client
-)
-DeclareCAmkESComponent(Encrypt 
-    SOURCES components/encrypt/encrypt.c 
-    INCLUDES include ${libs_dir}
-    LIBS gmssl
+    LIBS sel4allocman FileServer-client gmssl
 )
 DeclareCAmkESComponent(HWRNG
     SOURCES components/hwrng/hwrng.c 

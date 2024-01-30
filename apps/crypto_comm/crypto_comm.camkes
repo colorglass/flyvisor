@@ -2,9 +2,7 @@
 import <std_connector.camkes>;
 import <global-connectors.camkes>;
 import <rx/rx.camkes>;
-import <decrypt/Decrypt.camkes>;
-import <encrypt/Encrypt.camkes>;
-//import <crypto/crypto.camkes>;
+import <server/server.camkes>;
 import <hwrng/hwrng.camkes>;
 
 import <FileServer/FileServer.camkes>;
@@ -20,41 +18,45 @@ component GPIO {
     dataport Buf(4096) reg;
 }
 
+component Timer{
+    hardware;
+    dataport Buf(4096) reg;
+    emits TimerIRQ irq;
+}
+
 assembly {
     composition {
         component UARTs uarts;
         component GPIO gpio;
+        component Timer timer;
 
         component Rx recv;
-        component Encrypt encrypt;
-        component Decrypt decrypt;
-        //component Crypto crypto;
+        component Server server;
 
         component HWRNG hwrng;
         component FileServer fsrv;
 
+        // hardware connection
         connection seL4HardwareMMIO rx_uart_reg_conn(from recv.uart_reg, to uarts.reg);
         connection seL4HardwareInterrupt rx_irq_conn(from uarts.irq, to recv.uart_irq);
+        connection seL4HardwareMMIO timer_reg_conn(from recv.timer_reg, to timer.reg);
+        connection seL4HardwareInterrupt rx_timer_irq_conn(from timer.irq, to recv.timer_irq);
         connection seL4HardwareMMIO gpio_reg_conn(from recv.gpio_reg, to gpio.reg);
 
-        connection seL4HardwareMMIO encrypt_uart_reg_conn(from encrypt.uart_reg, to uarts.reg);
-        connection seL4HardwareMMIO decrypt_uart_reg_conn(from decrypt.uart_reg, to uarts.reg);
+        connection seL4HardwareMMIO server_uart_reg_conn(from server.uart_reg, to uarts.reg);
 
-        connection seL4SharedData recv_encrypt_buf_conn(from recv.encrypt_buf, to encrypt.recv_buf);
-        connection seL4SharedData recv_decrypt_buf_conn(from recv.decrypt_buf, to decrypt.recv_buf);
-
-        connection seL4Notification gcs_data_ready_conn(from recv.gcs_ready, to decrypt.gcs_ready);
-        connection seL4Notification fc_data_ready_conn(from recv.fc_ready, to encrypt.fc_ready);
+        // data buffer connection
+        connection seL4SharedData gcs_buf_conn(from server.gcs_msg_buf, to recv.gcs_msg_buf);
+        connection seL4SharedData fc_buf_conn(from server.fc_msg_buf, to recv.fc_msg_buf);
+        connection seL4Notification gcs_data_ready_conn(from recv.gcs_ready, to server.gcs_ready);
+        connection seL4Notification fc_data_ready_conn(from recv.fc_ready, to server.fc_ready);
+        connection seL4NotificationNative data_timeout_conn(from recv.data_timeout, to server.data_timeout);
 
         // hwrng
         connection seL4DTBHardware hwrng_dtb_conn(from hwrng.dtb_src, to hwrng.dtb);
-        connection seL4RPCCall rng_inf_decrypt_conn(from decrypt.rng, to hwrng.rng);
-        connection seL4RPCCall rng_inf_encrypt_conn(from encrypt.rng, to hwrng.rng);
-        //connection seL4RPCCall rng_inf_crypto_conn(from crypto.rng, to hwrng.rng);
+        connection seL4RPCCall rng_inf_conn(from server.rng, to hwrng.rng);
 
-        connection seL4RPCDataport fs_decrypt_conn(from decrypt.fs, to fsrv.fs_ctrl);
-
-        //connection seL4RPCDataport crypto_sm_conn(from recv.sm, to crypto.sm);
+        connection seL4RPCDataport fs_conn(from server.fs, to fsrv.fs_ctrl);
     }
 
     configuration {
@@ -65,13 +67,17 @@ assembly {
         gpio.reg_size = 0x1000;
         timer.reg_paddr = 0xfe003000;
         timer.reg_size = 0x1000;
+        timer.irq_irq_number = 64;  // use the channel 0
 
         recv.priority = 254;
-        encrypt.priority = 253;
-        decrypt.priority = 253;
         hwrng.priority = 254;
+        server.priority = 253;
 
-        recv_encrypt_buf_conn.size = 8192;
-        recv_decrypt_buf_conn.size = 8192;
+        gcs_buf_conn.size = 8192;
+        fc_buf_conn.size = 8192;
+
+        server.simple = 1;
+        server.simple_untyped20_pool = 16;
+        server.cnode_size_bits = 18;
     }
 }

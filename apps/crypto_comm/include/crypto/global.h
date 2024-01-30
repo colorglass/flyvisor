@@ -47,6 +47,9 @@
 #define FC_UART_RX_PIN GPIO_UART5_RX_PIN
 #define FC_UART_PIN_ALT GPIO_UART5_PIN_ALT
 
+#define TIMER_ADDR 0xfe003000
+#define TIMER_FREQ 1000000
+
 struct pl011_regs {
     uint32_t dr;
     uint32_t rsrecr;
@@ -97,36 +100,19 @@ struct bcm2711_gpio_regs {
     uint32_t gppud[4];         // 0xe4
 };
 
+struct timer_regs {
+    uint32_t cs;
+    uint32_t clo;
+    uint32_t chi;
+    uint32_t c0;
+    uint32_t c1;
+    uint32_t c2;
+    uint32_t c3;
+};
+
 static inline void uart_putchar(volatile struct pl011_regs *uart, char c)
 {
     while (uart->fr & BIT(5))
         ;
     uart->dr = c;
 }
-
-#define HEADER_MAGIC 0xe7
-#define PACKAGE_MAX_DATA_LEN 288
-
-enum package_fun {
-    REQUEST_CONN = 0x01,
-    REQUEST_AUTH = 0x02,
-    DATA = 0x04,
-    RESPONSE_OK = 0x10,
-    RESPONSE_ERROR = 0x20,
-};
-
-enum package_response_error {
-    ERROR_CRC = 0x01,
-    ERROR_FUN = 0x02,
-    ERROR_AUTH = 0x04,
-    ERROR_CONN = 0x08,
-    ERROR_PUBKEY = 0x10,
-};
-
-struct encrypt_package {
-    uint8_t magic;
-    uint8_t len;
-    uint8_t fun;
-    uint16_t crc;
-    uint8_t data[PACKAGE_MAX_DATA_LEN];
-} __attribute__((packed));
