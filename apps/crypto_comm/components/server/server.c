@@ -9,6 +9,7 @@
 #include <vspace/vspace.h>
 #include <sel4utils/vspace.h>
 #include <sel4utils/helpers.h>
+#include <sel4utils/thread.h>
 
 #include <fsclient.h>
 
@@ -27,16 +28,9 @@
 
 
 #define SERVER_PRIORITY 253
-#define THREAD_CNODE_SIZE_BITS 6
 
 #define ALLOCATOR_MEMPOOL_SIZE 0x1000000
 static char allocator_mempool[ALLOCATOR_MEMPOOL_SIZE] ALIGN(PAGE_SIZE_4K) SECTION("align_12bit");
-
-#define THREAD_STACK_SIZE 0x4000
-static char decrypt_thread_stack[THREAD_STACK_SIZE] ALIGN(PAGE_SIZE_4K) SECTION("align_12bit");
-static char encrypt_thread_stack[THREAD_STACK_SIZE] ALIGN(PAGE_SIZE_4K) SECTION("align_12bit");
-static uintptr_t decrypt_stack_top = (uintptr_t)decrypt_thread_stack + THREAD_STACK_SIZE;
-static uintptr_t encrypt_stack_top = (uintptr_t)encrypt_thread_stack + THREAD_STACK_SIZE;
 
 void *uart_reg_translate_paddr(uintptr_t paddr, size_t size);
 extern void camkes_make_simple(simple_t *simple);
@@ -49,9 +43,17 @@ vka_t vka;
 vspace_t vspace;
 allocman_t *allocman;
 sel4utils_alloc_data_t alloc_data;
+
+sel4utils_thread_config_t thread_config;
+sel4utils_thread_t decrypt_thread;
+sel4utils_thread_t encrypt_thread;
+sel4utils_checkpoint_t decrypt_checkpoint;
+sel4utils_checkpoint_t encrypt_checkpoint;
+
 seL4_CPtr root_cnode;
 seL4_CPtr root_vspace;
 seL4_CPtr root_tcb;
+
 
 static volatile struct pl011_regs *gcs_uart;
 static volatile struct pl011_regs *fc_uart;
@@ -110,7 +112,8 @@ static int chiper_package_read(struct chiper_package *package)
     return fun;
 }
 
-void encryption_server(void) {
+void encryption_server(void *arg0, void *arg1, void *ipc_buf) 
+{
     int result = 0;
     struct chiper_package chiper_package = {0};
     uint8_t plain_buf[PACKAGE_MAX_DATA_LEN] = {0};
@@ -132,7 +135,7 @@ void encryption_server(void) {
 
         plain_len = mavlink_msg_to_send_buffer(plain_buf, &mav_msg);
         if(plain_len == 0) {
-            ZF_LOGW("[encryption_server]: mavlink_msg_to_send_buffer failed");
+            ZF_LOGI("[encryption_server]: mavlink_msg_to_send_buffer failed");
             continue;
         }
 
@@ -148,7 +151,8 @@ void encryption_server(void) {
     }
 }
 
-void decryption_server(void) {
+void decryption_server(void *arg0, void *arg1, void *ipc_buf)
+{
     int result = 0;
     struct chiper_package chiper_package = {0};
     uint8_t plain_buf[PACKAGE_MAX_DATA_LEN] = {0};
@@ -159,7 +163,7 @@ void decryption_server(void) {
     while(1) {
         result = chiper_package_read(&chiper_package);
         if(result != DATA) {
-            ZF_LOGW("[decryption_server]: unexpected package with fun %d", result);
+            ZF_LOGI("[decryption_server]: unexpected package with fun %d", result);
             continue;
         }
 
@@ -306,74 +310,52 @@ error_conn:
     return -1;
 }
 
-static void server_config_thread(vka_object_t* thread, void* entry_point, void* stack_top)
-{
-    seL4_UserContext regs = {0};
-    sel4utils_arch_init_context(entry_point, stack_top, &regs);
-    seL4_TCB_WriteRegisters(thread->cptr, 0, 0, sizeof(regs)/sizeof(seL4_Word), &regs);
-}
-
-static void server_create_thread(vka_t *vka, vka_object_t* thread, int prio,
-                         void* entry_point, void* stack_top, char* thread_name)
-{
-    vka_object_t cnode;
-    vka_alloc_tcb(vka, thread);
-    vka_alloc_cnode_object(vka, THREAD_CNODE_SIZE_BITS, &cnode);
-    // vka_cspace_make_path(vka, root_vspace, )
-    seL4_TCB_Configure(thread->cptr, seL4_CapNull, root_cnode, seL4_NilData, root_vspace, seL4_NilData, 0, seL4_CapNull);
-    seL4_TCB_SetSchedParams(thread->cptr, root_tcb, SERVER_PRIORITY, prio);
-    seL4_DebugNameThread(thread->cptr, thread_name);
-
-    server_config_thread(thread, entry_point, stack_top);
-}
-
 
 int run() {
 
-    seL4_CPtr root_cnode, root_pd;
     camkes_make_simple(&simple);
 
     root_cnode = simple_get_init_cap(&simple, seL4_CapInitThreadCNode);
-    root_pd = simple_get_init_cap(&simple, seL4_CapInitThreadPD);
+    root_vspace = simple_get_init_cap(&simple, seL4_CapInitThreadPD);
     root_tcb = simple_get_init_cap(&simple, seL4_CapInitThreadTCB);
 
     allocman = bootstrap_use_current_simple(&simple, ALLOCATOR_MEMPOOL_SIZE, allocator_mempool);
     allocman_make_vka(&vka, allocman);
-    sel4utils_bootstrap_vspace(&vspace, &alloc_data, root_pd, &vka, NULL, NULL, NULL);
+    sel4utils_bootstrap_vspace(&vspace, &alloc_data, root_vspace, &vka, NULL, NULL, NULL);
 
     uint32_t seed = rng_rand_num();
     gmssl_rand_seed_init(seed);
-    ZF_LOGI("[server]: get initial random seed: 0x%08x", seed);
+    ZF_LOGD("[server]: get initial random seed: 0x%08x", seed);
 
     install_fileserver(FILE_SERVER_INTERFACE(fs));
     gcs_uart = (volatile struct pl011_regs*)uart_reg_translate_paddr(GCS_UART_PADDR, 0x200);
     fc_uart = (volatile struct pl011_regs*)uart_reg_translate_paddr(FC_UART_PADDR, 0x200);
-    
-    vka_object_t decrypt_thread = {0};
-    vka_object_t encrypt_thread = {0};
 
-    server_create_thread(&vka, &decrypt_thread, SERVER_PRIORITY - 1, decryption_server, (void*)decrypt_stack_top, "decryption_server");
-    server_create_thread(&vka, &encrypt_thread, SERVER_PRIORITY - 1, encryption_server, (void*)encrypt_stack_top, "encryption_server");
+    thread_config = thread_config_default(&simple, root_cnode, seL4_NilData, seL4_CapNull, SERVER_PRIORITY - 1);
+    sel4utils_configure_thread_config(&vka, &vspace, &vspace, thread_config, &decrypt_thread);
+    sel4utils_configure_thread_config(&vka, &vspace, &vspace, thread_config, &encrypt_thread);
 
     ZF_LOGI("[server]: waiting for connection");
-    // while(create_connection());
+    while(create_connection());
     ZF_LOGI("[server]: connection established");
     // when waiting for a new connection, there may be already a timeout event
     // so we need to clear the signal
     data_timeout_poll();
 
-    seL4_TCB_Resume(decrypt_thread.cptr);
-    seL4_TCB_Resume(encrypt_thread.cptr);
+    sel4utils_start_thread(&decrypt_thread, decryption_server, NULL, NULL, true);
+    sel4utils_start_thread(&encrypt_thread, encryption_server, NULL, NULL, true);
 
+    // root thread has more prio than sub threads, so we can save the initial state here 
+    sel4utils_checkpoint_thread(&decrypt_thread, &decrypt_checkpoint, false);
+    sel4utils_checkpoint_thread(&encrypt_thread, &encrypt_checkpoint, false);
+    
     while(1) {
         data_timeout_wait();
 
         ZF_LOGI("[server]: time out event");
 
-        seL4_TCB_Suspend(decrypt_thread.cptr);
-        seL4_TCB_Suspend(encrypt_thread.cptr);
-        server_config_thread(&decrypt_thread, decryption_server, (void*)decrypt_stack_top);
-        server_config_thread(&encrypt_thread, encryption_server, (void*)encrypt_stack_top);
+        sel4utils_suspend_thread(&decrypt_thread);
+        sel4utils_suspend_thread(&encrypt_thread);
 
         memset(&sm4_encrypt_key, 0, sizeof(SM4_KEY));
         memset(&sm4_decrypt_key, 0, sizeof(SM4_KEY));
@@ -384,7 +366,7 @@ int run() {
         ZF_LOGI("[server]: connection established");
         data_timeout_poll();
         
-        seL4_TCB_Resume(decrypt_thread.cptr);
-        seL4_TCB_Resume(encrypt_thread.cptr);
+        sel4utils_checkpoint_restore(&decrypt_checkpoint, false, true);
+        sel4utils_checkpoint_restore(&encrypt_checkpoint, false, true);
     }
 }

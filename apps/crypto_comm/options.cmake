@@ -1,6 +1,6 @@
 set(RPI4_MEMORY 4096 CACHE STRING "Memory size in MB")
 
-set(LibUtilsDefaultZfLogLevel 0 CACHE STRING "Default log level for libutils")
+set(LibUtilsDefaultZfLogLevel 3 CACHE STRING "Default log level for libutils")
 
 set(RELEASE OFF CACHE BOOL "Performance optimized build")
 set(KernelMaxNumNodes 1 CACHE STRING "The cpu core number to be used" FORCE)
