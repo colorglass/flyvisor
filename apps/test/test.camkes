@@ -1,17 +1,57 @@
 import <std_connector.camkes>;
 import <global-connectors.camkes>;
 
-component Test{
+component Test {
     control;
+    consumes UartIRQ uart_irq;
+    consumes TimerIRQ timer_irq;
+    dataport Buf(4096) uart_reg;
+    dataport Buf(4096) gpio_reg;
+    dataport Buf(4096) timer_reg;
+}
+
+component UARTs {
+    hardware;
+    dataport Buf(4096) reg;
+    emits UartIRQ irq;
+}
+
+component GPIO {
+    hardware;
+    dataport Buf(4096) reg;
+}
+
+component Timer{
+    hardware;
+    dataport Buf(4096) reg;
+    emits TimerIRQ irq;
 }
 
 assembly{
     composition{
-        component Test test;
+        component UARTs uarts;
+        component GPIO gpio;
+        component Timer timer;
+
+        component Test recv;
+
+        connection seL4HardwareMMIO rx_uart_reg_conn(from recv.uart_reg, to uarts.reg);
+        connection seL4HardwareInterrupt rx_irq_conn(from uarts.irq, to recv.uart_irq);
+        connection seL4HardwareMMIO timer_reg_conn(from recv.timer_reg, to timer.reg);
+        connection seL4HardwareInterrupt rx_timer_irq_conn(from timer.irq, to recv.timer_irq);
+        connection seL4HardwareMMIO gpio_reg_conn(from recv.gpio_reg, to gpio.reg);
     }
 
     configuration{
-        test.simple = 1;
-        test.untyped12_pool = 16;
+        uarts.reg_paddr = 0xfe201000;
+        uarts.reg_size = 0x1000;
+        uarts.irq_irq_number = 153;
+        gpio.reg_paddr = 0xfe200000;
+        gpio.reg_size = 0x1000;
+        timer.reg_paddr = 0xfe003000;
+        timer.reg_size = 0x1000;
+        timer.irq_irq_number = 97;  // use the channel 1
+
+        recv.priority = 254;
     }
 }

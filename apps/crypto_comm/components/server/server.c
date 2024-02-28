@@ -205,6 +205,8 @@ static int create_connection(void)
         goto error_conn;
     }
 
+    ZF_LOGI("[connection]: conn request received");
+
     // assert the follow funcation is all success
 
     // establish secure channel
@@ -217,6 +219,8 @@ static int create_connection(void)
     chiper_package_create(&package, RESPONSE_OK, ecdh_public_key, 65);
     chiper_package_send(&package);
 
+    ZF_LOGI("[connection]: public key sent");
+
     // derive shared secret key
     sm3_kdf_init(&kdf_ctx, 32);
     sm3_kdf_update(&kdf_ctx, (uint8_t *)&ecdh_shared_point, sizeof(SM2_POINT));
@@ -227,6 +231,8 @@ static int create_connection(void)
     sm4_set_encrypt_key(&sm4_encrypt_key, shared_secret_key);
     memcpy(sm4_iv, &shared_secret_key[16], 16);
 
+    ZF_LOGI("[connection]: shared secret key established");
+
     /************************ authentication stage *******************************/
     // next is an auth request with the client public key path
     if (chiper_package_read(&package) != REQUEST_AUTH)
@@ -235,6 +241,8 @@ static int create_connection(void)
         reason = ERROR_FUN;
         goto error_auth;
     }
+
+    ZF_LOGI("[connection]: auth request received");
 
     // decrypt auth request
     sm4_cbc_padding_decrypt(&sm4_decrypt_key, sm4_iv, package.data, package.len, buffer, &buffer_len);
@@ -253,6 +261,8 @@ static int create_connection(void)
     sm2_public_key_info_from_pem(&sm2_key_pair, fp);
     fclose(fp);
 
+    ZF_LOGI("[connection]: client public key read");
+
     // send public key encrypted random number
     uint32_t random_num = rng_rand_num();
     sm2_encrypt(&sm2_key_pair, (uint8_t *)&random_num, sizeof(uint32_t), buffer, &buffer_len);
@@ -263,6 +273,8 @@ static int create_connection(void)
     chiper_package_create(&package, RESPONSE_OK, chiper_buffer, chiper_buffer_len);
     chiper_package_send(&package);
 
+    ZF_LOGI("[connection]: random number sent");
+
     // next is an auth request with the digest
     if (chiper_package_read(&package) != REQUEST_AUTH)
     {
@@ -270,6 +282,8 @@ static int create_connection(void)
         reason = ERROR_FUN;
         goto error_auth;
     }
+
+    ZF_LOGI("[connection]: auth verify request received");
 
     // decrypt auth request
     sm4_cbc_padding_decrypt(&sm4_decrypt_key, sm4_iv, package.data, package.len, buffer, &buffer_len);
@@ -293,6 +307,8 @@ static int create_connection(void)
         reason = ERROR_AUTH;
         goto error_auth;
     }
+
+    ZF_LOGI("[connection]: auth success");
 
     // send auth response
     chiper_package_create(&package, RESPONSE_OK, NULL, 0);

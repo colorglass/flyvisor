@@ -26,12 +26,12 @@ static inline uint32_t timer_get_ms()
 
 static inline void timer_set_timeout(uint32_t ms)
 {
-    if(timer_regs->cs & 0x1)
-        timer_regs->cs = 0x1;
+    if(timer_regs->cs & TIMER_CS_Mx(TIMER_CHANNEL))
+        timer_regs->cs = TIMER_CS_Mx(TIMER_CHANNEL);
 
     uint32_t tick = timer_regs->clo;
     uint32_t timeout = tick + (uint32_t)freq_ns_and_hz_to_cycles(ms * NS_IN_MS, TIMER_FREQ);
-    timer_regs->c0 = timeout;
+    timer_regs->chan[TIMER_CHANNEL] = timeout;
 }
 
 static void uart_gpio_configure(int tx_pin, int rx_pin, int alt)
@@ -105,8 +105,9 @@ void uart_irq_handle(void)
 
     if(fc_uart->mis & (BIT(4) | BIT(6))) {
         fc_uart->icr = BIT(4) | BIT(6);
-        while(!(fc_uart->fr & BIT(4)))
+        while(!(fc_uart->fr & BIT(4))) {
             ring_buffer_put(fc_msg_buf, fc_uart->dr);
+        }
         fc_ready_emit();
     }
 
@@ -117,10 +118,11 @@ void uart_irq_handle(void)
 
 void timer_irq_handle()
 {
-    if(timer_regs->cs & 0x1) {
-        timer_regs->cs = 0x1;
+    if(timer_regs->cs & TIMER_CS_Mx(TIMER_CHANNEL)) {
+        timer_regs->cs = TIMER_CS_Mx(TIMER_CHANNEL);
         data_timeout_emit();
         timer_set_timeout(1 * MS_IN_MINUTE);
+        printf("Data timeout\n");
     }
 
     timer_irq_acknowledge();

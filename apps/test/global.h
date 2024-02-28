@@ -48,7 +48,6 @@
 #define FC_UART_PIN_ALT GPIO_UART5_PIN_ALT
 
 #define TIMER_ADDR 0xfe003000
-// only channel 1 and 3 are available
 #define TIMER_CHANNEL 1
 #define TIMER_CS_Mx(chan) (BIT(chan))
 #define TIMER_FREQ 1000000

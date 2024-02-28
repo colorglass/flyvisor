@@ -67,7 +67,7 @@ assembly {
         gpio.reg_size = 0x1000;
         timer.reg_paddr = 0xfe003000;
         timer.reg_size = 0x1000;
-        timer.irq_irq_number = 64;  // use the channel 0
+        timer.irq_irq_number = 97;  // use the channel 1
 
         recv.priority = 254;
         hwrng.priority = 254;

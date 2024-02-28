@@ -15,7 +15,7 @@ global_components_import_project()
 
 # create cpio archive file and file server, in which the public keys are stored
 include(cpio)
-file(GLOB public_keys "${CMAKE_CURRENT_SOURCE_DIR}/public_keys/*")
+file(GLOB public_keys "${root_dir}/resources/public_keys/*")
 MakeCPIO(cpio_keys.o "${public_keys}")
 add_library(cpio_archive STATIC cpio_keys.o)
 set_target_properties(cpio_archive PROPERTIES LINKER_LANGUAGE C)

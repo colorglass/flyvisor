@@ -2,3 +2,4 @@ builds/
 outputs/
 temp/
 python-venv/
+public_keys/
