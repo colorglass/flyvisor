@@ -127,6 +127,9 @@ void encryption_server(void *arg0, void *arg1, void *ipc_buf)
 
     ZF_LOGI("[encryption_server]: start encryption_server");
 
+    // discard the outdata mavlink message
+    ring_buffer_init(fc_msg_buf, MSG_BUFFER_SIZE);
+
     while(1) {
         do{
             uint8_t c = ring_read_fc();
@@ -138,6 +141,10 @@ void encryption_server(void *arg0, void *arg1, void *ipc_buf)
             ZF_LOGI("[encryption_server]: mavlink_msg_to_send_buffer failed");
             continue;
         }
+
+#ifdef DEBUG_SERVER
+        ZF_LOGI("[encryption_server]: recive msg: %s", mavlink_get_message_info(&mav_msg)->name);
+#endif
 
         result = sm4_cbc_padding_encrypt(&sm4_encrypt_key, sm4_iv, plain_buf, plain_len, chiper_buf, &chiper_len);
         if(result != 1) {
@@ -158,6 +165,12 @@ void decryption_server(void *arg0, void *arg1, void *ipc_buf)
     uint8_t plain_buf[PACKAGE_MAX_DATA_LEN] = {0};
     size_t plain_len = 0;
 
+#ifdef DEBUG_SERVER
+        mavlink_message_t mav_msg = {0};
+        mavlink_status_t mav_status = {0};
+        mavlink_channel_t mav_chan = MAVLINK_COMM_1;
+#endif
+
     ZF_LOGI("[decryption_server]: start decryption_server");
 
     while(1) {
@@ -172,6 +185,16 @@ void decryption_server(void *arg0, void *arg1, void *ipc_buf)
             ZF_LOGE("[decryption_server]: decrypt failed for package with data len: %d", chiper_package.len);
             continue;
         }
+
+#ifdef DEBUG_SERVER
+        uint8_t result = 0;
+        for(int i=0; i < plain_len; i++) {
+            uint8_t result = mavlink_parse_char(mav_chan, plain_buf[i], &mav_msg, &mav_status);
+            if(result == MAVLINK_FRAMING_OK) {
+                ZF_LOGI("[decryption_server]: recive msg: %s", mavlink_get_message_info(&mav_msg)->name);
+            }
+        }
+#endif
 
         for(size_t i = 0; i < plain_len; i++)
             uart_putchar(fc_uart, plain_buf[i]);

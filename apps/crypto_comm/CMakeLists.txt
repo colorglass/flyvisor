@@ -25,6 +25,11 @@ add_subdirectory(${libs_dir}/GmSSL libgmssl)
 
 CAmkESAddImportPath(interfaces components)
 
+set(extra_flags)
+if(DebugServer)
+    list(APPEND extra_flags -DDEBUG_SERVER -DMAVLINK_USE_MESSAGE_INFO)
+endif()
+
 DeclareCAmkESComponent(Rx 
     SOURCES components/rx/rx.c 
     INCLUDES include
@@ -33,6 +38,7 @@ DeclareCAmkESComponent(Server
     SOURCES components/server/server.c
     INCLUDES include ${libs_dir}
     LIBS sel4allocman FileServer-client gmssl
+    C_FLAGS ${extra_flags}
 )
 DeclareCAmkESComponent(HWRNG
     SOURCES components/hwrng/hwrng.c 
