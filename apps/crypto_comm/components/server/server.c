@@ -143,7 +143,7 @@ void encryption_server(void *arg0, void *arg1, void *ipc_buf)
         }
 
 #ifdef DEBUG_SERVER
-        ZF_LOGI("[encryption_server]: recive msg: %s", mavlink_get_message_info(&mav_msg)->name);
+        ZF_LOGI("[encryption_server]: FC msg: %s", mavlink_get_message_info(&mav_msg)->name);
 #endif
 
         result = sm4_cbc_padding_encrypt(&sm4_encrypt_key, sm4_iv, plain_buf, plain_len, chiper_buf, &chiper_len);
@@ -191,7 +191,7 @@ void decryption_server(void *arg0, void *arg1, void *ipc_buf)
         for(int i=0; i < plain_len; i++) {
             uint8_t result = mavlink_parse_char(mav_chan, plain_buf[i], &mav_msg, &mav_status);
             if(result == MAVLINK_FRAMING_OK) {
-                ZF_LOGI("[decryption_server]: recive msg: %s", mavlink_get_message_info(&mav_msg)->name);
+                ZF_LOGI("[decryption_server]: GCS msg: %s", mavlink_get_message_info(&mav_msg)->name);
             }
         }
 #endif

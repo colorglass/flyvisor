@@ -81,3 +81,6 @@
 [submodule "libs/GmSSL"]
 	path = libs/GmSSL
 	url = https://github.com/guanzhi/GmSSL.git
+[submodule "utils/mav_crypt_proxy"]
+	path = utils/mav_crypt_proxy
+	url = https://github.com/colorglass/flyvisor_msg_proxy.git
