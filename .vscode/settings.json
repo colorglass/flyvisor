@@ -53,7 +53,11 @@
         "allocman.h": "c",
         "mavlink.h": "c",
         "chiper_package.h": "c",
-        "frequency.h": "c"
+        "frequency.h": "c",
+        "mailbox.h": "c",
+        "io.h": "c",
+        "dma.h": "c",
+        "rpi4-dma.h": "c"
     },
     "git.detectSubmodules": false,
     "git.ignoreSubmodules": true,

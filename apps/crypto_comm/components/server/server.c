@@ -1,4 +1,5 @@
 #include <camkes.h>
+#include <camkes/io.h>
 #include <sel4/sel4.h>
 #include <simple/simple.h>
 #include <simple/simple_helpers.h>
@@ -18,6 +19,7 @@
 #include <crypto/chiper_package.h>
 #include <crypto/ring_buffer.h>
 #include <crypto/global.h>
+#include <rpi4-dma.h>
 
 #include <gmssl/rand.h>
 #include <gmssl/sm2.h>
@@ -65,6 +67,10 @@ static SM4_KEY sm4_encrypt_key;
 static SM4_KEY sm4_decrypt_key;
 static uint8_t sm4_iv[16];
 
+static struct dma_channel dma_channel0;
+static struct dma_channel dma_channel1;
+static struct dma_uart_config gcs_uart_config;
+static struct dma_uart_config fc_uart_config;
 
 static inline uint8_t ring_read_gcs() 
 {
@@ -80,6 +86,11 @@ static inline uint8_t ring_read_fc()
         fc_ready_wait();
 
     return ring_buffer_get(fc_msg_buf);
+}
+
+static inline void chiper_package_send_dma(struct chiper_package* package)
+{
+    dma_transform_send_uart(&dma_channel0, package, package->len + 4, &gcs_uart_config);
 }
 
 static inline void chiper_package_send(struct chiper_package* package)
@@ -154,7 +165,7 @@ void encryption_server(void *arg0, void *arg1, void *ipc_buf)
 
         chiper_package_create(&chiper_package, DATA, chiper_buf, chiper_len);
         
-        chiper_package_send(&chiper_package);
+        chiper_package_send_dma(&chiper_package);
     }
 }
 
@@ -196,8 +207,9 @@ void decryption_server(void *arg0, void *arg1, void *ipc_buf)
         }
 #endif
 
-        for(size_t i = 0; i < plain_len; i++)
-            uart_putchar(fc_uart, plain_buf[i]);
+        // for(size_t i = 0; i < plain_len; i++)
+        //     uart_putchar(fc_uart, plain_buf[i]);
+        dma_transform_send_uart(&dma_channel1, plain_buf, plain_len, &fc_uart_config);
     }
 }
 
@@ -349,8 +361,32 @@ error_conn:
     return -1;
 }
 
+static void init_device()
+{
+    ps_io_ops_t io_ops;
+    camkes_io_ops(&io_ops);
+    dma_init(&io_ops.dma_manager, &dma_channel0, 0);
+    dma_init(&io_ops.dma_manager, &dma_channel1, 1);
+
+    gcs_uart_config.io_bus_addr = 0x7e201800;
+    gcs_uart_config.permap_in = UART4_RX;
+    gcs_uart_config.permap_out = UART4_TX;
+
+    fc_uart_config.io_bus_addr = 0x7e201a00;
+    fc_uart_config.permap_in = UART5_RX;
+    fc_uart_config.permap_out = UART5_TX;
+
+    gcs_uart = (volatile struct pl011_regs*)uart_reg_translate_paddr(GCS_UART_PADDR, 0x200);
+    fc_uart = (volatile struct pl011_regs*)uart_reg_translate_paddr(FC_UART_PADDR, 0x200);
+
+    uint32_t seed = rng_rand_num();
+    gmssl_rand_seed_init(seed);
+    ZF_LOGD("[server]: get initial random seed: 0x%08x", seed);
+}
 
 int run() {
+
+    init_device();
 
     camkes_make_simple(&simple);
 
@@ -362,13 +398,7 @@ int run() {
     allocman_make_vka(&vka, allocman);
     sel4utils_bootstrap_vspace(&vspace, &alloc_data, root_vspace, &vka, NULL, NULL, NULL);
 
-    uint32_t seed = rng_rand_num();
-    gmssl_rand_seed_init(seed);
-    ZF_LOGD("[server]: get initial random seed: 0x%08x", seed);
-
     install_fileserver(FILE_SERVER_INTERFACE(fs));
-    gcs_uart = (volatile struct pl011_regs*)uart_reg_translate_paddr(GCS_UART_PADDR, 0x200);
-    fc_uart = (volatile struct pl011_regs*)uart_reg_translate_paddr(FC_UART_PADDR, 0x200);
 
     thread_config = thread_config_default(&simple, root_cnode, seL4_NilData, seL4_CapNull, SERVER_PRIORITY - 1);
     sel4utils_configure_thread_config(&vka, &vspace, &vspace, thread_config, &decrypt_thread);

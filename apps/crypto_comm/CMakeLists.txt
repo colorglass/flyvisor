@@ -35,8 +35,8 @@ DeclareCAmkESComponent(Rx
     INCLUDES include
 )
 DeclareCAmkESComponent(Server
-    SOURCES components/server/server.c
-    INCLUDES include ${libs_dir}
+    SOURCES components/server/server.c driver/rpi4-dma.c
+    INCLUDES include ${libs_dir} driver
     LIBS sel4allocman FileServer-client gmssl
     C_FLAGS ${extra_flags}
 )

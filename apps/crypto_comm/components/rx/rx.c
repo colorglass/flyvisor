@@ -85,6 +85,9 @@ static void uart_init(volatile struct pl011_regs *uart, uint32_t baud_rate)
     // enable rx and rx timeout irq
     uart->imsc |= BIT(4) | BIT(6);
 
+    // enable uart rx tx dma signals
+    uart->dmacr |= 0b11;
+
     // enable rx and tx
     uart->cr |= BIT(9) | BIT(8);
 

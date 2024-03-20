@@ -14,7 +14,7 @@ sel4_projects_libs_import_libraries()
 global_components_import_project()
 
 DeclareCAmkESComponent(Test
-    SOURCES test.c
+    SOURCES test.c dma.c
 )
 
 DeclareCAmkESRootserver(test.camkes)

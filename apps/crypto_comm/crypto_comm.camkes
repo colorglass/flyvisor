@@ -24,11 +24,17 @@ component Timer{
     emits TimerIRQ irq;
 }
 
+component DMA{
+    hardware;
+    dataport Buf(4096) reg;
+}
+
 assembly {
     composition {
         component UARTs uarts;
         component GPIO gpio;
         component Timer timer;
+        component DMA dma;
 
         component Rx recv;
         component Server server;
@@ -44,6 +50,7 @@ assembly {
         connection seL4HardwareMMIO gpio_reg_conn(from recv.gpio_reg, to gpio.reg);
 
         connection seL4HardwareMMIO server_uart_reg_conn(from server.uart_reg, to uarts.reg);
+        connection seL4HardwareMMIO server_dma_reg_conn(from server.dma_reg, to dma.reg);
 
         // data buffer connection
         connection seL4SharedData gcs_buf_conn(from server.gcs_msg_buf, to recv.gcs_msg_buf);
@@ -68,6 +75,8 @@ assembly {
         timer.reg_paddr = 0xfe003000;
         timer.reg_size = 0x1000;
         timer.irq_irq_number = 97;  // use the channel 1
+        dma.reg_paddr = 0xfe007000;
+        dma.reg_size = 0x1000;
 
         recv.priority = 254;
         hwrng.priority = 254;
@@ -79,5 +88,7 @@ assembly {
         server.simple = 1;
         server.simple_untyped20_pool = 16;
         server.cnode_size_bits = 18;
+        server.dma_pool = 0x100000;
+        server.dma_pool_paddr = 0x20000000;
     }
 }

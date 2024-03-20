@@ -6,6 +6,7 @@ component Server{
 
     // hardwares
     dataport Buf(4096) uart_reg;
+    dataport Buf(4096) dma_reg;
 
     // rx receive data buffer
     include "crypto/ring_buffer.h";
