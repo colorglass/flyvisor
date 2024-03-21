@@ -2,7 +2,7 @@
 #include <string.h>
 #include "dma.h"
 
-static int dma_reset(struct dma_channel* channel)
+int dma_reset(struct dma_channel* channel)
 {
     volatile struct dma_channel_regs* regs = channel->regs;
     regs->cs |= DMA_CS_RESET;
@@ -16,7 +16,7 @@ static int dma_reset(struct dma_channel* channel)
     return 0;
 }
 
-extern volatile void *dma_0;
+extern volatile void *dma_reg;
 
 int dma_init(ps_dma_man_t* dma_ops, struct dma_channel* dma_channel, int channel)
 {
@@ -25,7 +25,7 @@ int dma_init(ps_dma_man_t* dma_ops, struct dma_channel* dma_channel, int channel
     assert(dma_channel);
 
     dma_channel->channel = channel;
-    dma_channel->regs = (struct dma_channel_regs*)(dma_0 + 0x100 * channel);
+    dma_channel->regs = (struct dma_channel_regs*)(dma_reg + 0x100 * channel);
     
     // cb should be aligned to 32 bytes
     dma_channel->buffer.ptr = ps_dma_alloc(dma_ops, PAGE_SIZE_4K, PAGE_SIZE_4K, false, PS_MEM_NORMAL);
@@ -46,7 +46,7 @@ int dma_init(ps_dma_man_t* dma_ops, struct dma_channel* dma_channel, int channel
 
     memset(dma_channel->cb_list.cbs, 0, PAGE_SIZE_4K);
 
-    *(volatile uint32_t*)(dma_0 + 0xff0) |= 1 << channel;
+    *(volatile uint32_t*)(dma_reg + 0xff0) |= 1 << channel;
 
     return dma_reset(dma_channel);
 }
@@ -82,4 +82,47 @@ int dma_transform_send_uart(struct dma_channel* channel, void* src, size_t size,
     channel->regs->cs |= DMA_CS_ACTIVE;
 
     return 0;
+}
+
+
+int dma_transform_read_uart(struct dma_channel* channel, struct dma_uart_config* uart)
+{
+    if(channel->regs->cs & DMA_CS_ERROR_STA) {
+        int err;
+        if(err = dma_reset(channel))
+            return err;
+    }
+
+    struct dma_control_block* cb = &channel->cb_list.cbs[0];
+    cb->ti = DMA_TI_DEST_INC | DMA_TI_SRC_DREQ | DMA_TI_PERMAP(uart->permap_in) | DMA_TI_INTEN;
+    cb->source_ad = uart->io_bus_addr;
+    cb->dest_ad = channel->buffer.bus_addr;
+    cb->txfr_len = 32 * 4;
+    cb->stride = 0;
+    cb->nextconbk = 0;
+
+    channel->regs->conblk_addr = channel->cb_list.bus_addr;
+    channel->regs->cs |= DMA_CS_ACTIVE;
+
+    return 0;
+}
+
+int dma_transform_read_get_data(struct dma_channel* channel, void* dest)
+{
+    // pause the dma
+    channel->regs->cs &= ~DMA_CS_ACTIVE;
+
+    // get received data size
+    uint32_t size = (channel->regs->dest_ad - channel->buffer.bus_addr) / 4;
+    printf("size: %d\n", size);
+    if(size == 0) {
+        printf("cs: %x\n", channel->regs->cs);
+    }
+
+    uint32_t* buffer = channel->buffer.ptr;
+    for(int i = 0; i < size; i++) {
+        ((uint8_t*)dest)[i] = buffer[i] & 0xff;
+    }
+
+    return size;
 }

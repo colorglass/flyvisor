@@ -4,9 +4,12 @@ component Rx {
     control;
     consumes UartIRQ uart_irq;
     consumes TimerIRQ timer_irq;
+    consumes DMAIRQ dma_irq0;
+    consumes DMAIRQ dma_irq1;
     dataport Buf(4096) uart_reg;
     dataport Buf(4096) gpio_reg;
     dataport Buf(4096) timer_reg;
+    dataport Buf(4096) dma_reg;
     dataport ring_buffer_t gcs_msg_buf;
     dataport ring_buffer_t fc_msg_buf;
     emits GCS_data_ready gcs_ready;

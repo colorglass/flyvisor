@@ -49,7 +49,6 @@
 
 #define TIMER_ADDR 0xfe003000
 // only channel 1 and 3 are available
-#define TIMER_CHANNEL 1
 #define TIMER_CS_Mx(chan) (BIT(chan))
 #define TIMER_FREQ 1000000
 
@@ -108,6 +107,11 @@ struct timer_regs {
     uint32_t clo;
     uint32_t chi;
     uint32_t chan[4];
+};
+
+enum timer_channel {
+    TIMER_CHAN_1 = 1,
+    TIMER_CHAN_3 = 3,
 };
 
 static inline void uart_putchar(volatile struct pl011_regs *uart, char c)

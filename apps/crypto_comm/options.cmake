@@ -18,4 +18,4 @@ set(KernelArmDisableWFIWFETraps ON CACHE BOOL "" FORCE)
 set(CapDLLoaderMaxObjects 90000 CACHE STRING "" FORCE)
 # set(LibUSB OFF CACHE BOOL "" FORCE)
 
-set(DebugServer ON CACHE BOOL "" FORCE)
+set(DebugServer OFF CACHE BOOL "" FORCE)

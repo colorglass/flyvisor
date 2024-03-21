@@ -106,6 +106,13 @@ struct dma_cb_list {
 struct dma_channel_regs {
     uint32_t cs;
     uint32_t conblk_addr;
+    uint32_t ti;
+    uint32_t source_ad;
+    uint32_t dest_ad;
+    uint32_t txfr_len;
+    uint32_t stride;
+    uint32_t nextconbk;
+    uint32_t debug;
 };
 
 struct dma_buffer {
@@ -122,5 +129,8 @@ struct dma_channel {
     struct dma_buffer buffer;
 };
 
+int dma_reset(struct dma_channel* channel);
 int dma_init(ps_dma_man_t* dma_ops, struct dma_channel* dma_channel, int channel);
 int dma_transform_send_uart(struct dma_channel* channel, void* src, size_t size, struct dma_uart_config* uart);
+int dma_transform_read_uart(struct dma_channel* channel, struct dma_uart_config* uart);
+int dma_transform_read_get_data(struct dma_channel* channel, void* dest);

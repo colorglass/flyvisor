@@ -3,15 +3,13 @@ import <global-connectors.camkes>;
 
 component Test {
     control;
-    emits dtbs dma_src;
-    consumes dtbs dma;
     dataport Buf(4096) uart_reg;
     dataport Buf(4096) gpio_reg;
+    dataport Buf(4096) dma_reg;
+    dataport Buf(4096) timer_reg;
 
-    composition{}
-    configuration{
-        dma.dtb = dtb({"path":"/soc/dma@7e007000"});
-    }
+    consumes DMAIRQ dma_irq;
+    consumes TimerIRQ timer_irq;
 }
 
 component UARTs {
@@ -31,14 +29,25 @@ component Timer{
     emits TimerIRQ irq;
 }
 
+component DMA{
+    hardware;
+    dataport Buf(4096) reg;
+    emits DMAIRQ irq;
+}
+
 assembly{
     composition{
         component UARTs uarts;
         component GPIO gpio;
+        component DMA dma;
+        component Timer timer;
         component Test test;
-        connection seL4DTBHardware dma_conn(from test.dma_src, to test.dma);
         connection seL4HardwareMMIO rx_uart_reg_conn(from test.uart_reg, to uarts.reg);
         connection seL4HardwareMMIO rx_gpio_reg_conn(from test.gpio_reg, to gpio.reg);
+        connection seL4HardwareMMIO rx_dma_reg_conn(from test.dma_reg, to dma.reg);
+        connection seL4HardwareMMIO timer_reg_conn(from test.timer_reg, to timer.reg);
+        connection seL4HardwareInterrupt rx_timer_irq_conn(from timer.irq, to test.timer_irq);
+        connection seL4HardwareInterrupt rx_dma_irq_conn(from dma.irq, to test.dma_irq);
     }
 
     configuration{
@@ -46,6 +55,12 @@ assembly{
         uarts.reg_size = 0x1000;
         gpio.reg_paddr = 0xfe200000;
         gpio.reg_size = 0x1000;
+        dma.reg_paddr = 0xfe007000;
+        dma.reg_size = 0x1000;
+        dma.irq_irq_number = 112;
+        timer.reg_paddr = 0xfe003000;
+        timer.reg_size = 0x1000;
+        timer.irq_irq_number = 97;  // use the channel 1
         test.dma_pool = 0x100000;
         test.dma_pool_paddr = 0x20000000;
     }

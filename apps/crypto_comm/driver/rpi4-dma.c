@@ -53,7 +53,6 @@ int dma_init(ps_dma_man_t* dma_ops, struct dma_channel* dma_channel, int channel
 
 int dma_transform_send_uart(struct dma_channel* channel, void* src, size_t size, struct dma_uart_config* uart) {
 
-    printf("buffer size: %d, size: %d\n", channel->buffer.size, size);
     if(size * 4 > channel->buffer.size) {
         printf("DMA buffer size too small\n");
         return -1;
@@ -82,4 +81,42 @@ int dma_transform_send_uart(struct dma_channel* channel, void* src, size_t size,
     channel->regs->cs |= DMA_CS_ACTIVE;
 
     return 0;
+}
+
+int dma_transform_read_uart(struct dma_channel* channel, struct dma_uart_config* uart)
+{
+    if(channel->regs->cs & DMA_CS_ERROR_STA) {
+        int err;
+        if(err = dma_reset(channel))
+            return err;
+    }
+
+    struct dma_control_block* cb = &channel->cb_list.cbs[0];
+    cb->ti = DMA_TI_DEST_INC | DMA_TI_SRC_DREQ | DMA_TI_PERMAP(uart->permap_in) | DMA_TI_INTEN;
+    cb->source_ad = uart->io_bus_addr;
+    cb->dest_ad = channel->buffer.bus_addr;
+    cb->txfr_len = 32 * 4;
+    cb->stride = 0;
+    cb->nextconbk = 0;
+
+    channel->regs->conblk_addr = channel->cb_list.bus_addr;
+    channel->regs->cs |= DMA_CS_ACTIVE;
+
+    return 0;
+}
+
+int dma_transform_read_get_data(struct dma_channel* channel, void* dest)
+{
+    // pause the dma
+    channel->regs->cs &= ~DMA_CS_ACTIVE;
+
+    // get received data size
+    uint32_t size = (channel->regs->dest_ad - channel->buffer.bus_addr) / 4;
+
+    uint32_t* buffer = channel->buffer.ptr;
+    for(int i = 0; i < size; i++) {
+        ((uint8_t*)dest)[i] = buffer[i] & 0xff;
+    }
+
+    return size;
 }

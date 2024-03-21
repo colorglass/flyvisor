@@ -27,6 +27,8 @@ component Timer{
 component DMA{
     hardware;
     dataport Buf(4096) reg;
+    emits DMAIRQ irq0;
+    emits DMAIRQ irq1;
 }
 
 assembly {
@@ -48,6 +50,9 @@ assembly {
         connection seL4HardwareMMIO timer_reg_conn(from recv.timer_reg, to timer.reg);
         connection seL4HardwareInterrupt rx_timer_irq_conn(from timer.irq, to recv.timer_irq);
         connection seL4HardwareMMIO gpio_reg_conn(from recv.gpio_reg, to gpio.reg);
+        connection seL4HardwareMMIO dma_reg_conn(from recv.dma_reg, to dma.reg);
+        connection seL4HardwareInterrupt rx_dma_irq0_conn(from dma.irq0, to recv.dma_irq0);
+        connection seL4HardwareInterrupt rx_dma_irq1_conn(from dma.irq1, to recv.dma_irq1);
 
         connection seL4HardwareMMIO server_uart_reg_conn(from server.uart_reg, to uarts.reg);
         connection seL4HardwareMMIO server_dma_reg_conn(from server.dma_reg, to dma.reg);
@@ -77,6 +82,8 @@ assembly {
         timer.irq_irq_number = 97;  // use the channel 1
         dma.reg_paddr = 0xfe007000;
         dma.reg_size = 0x1000;
+        dma.irq0_irq_number = 112;
+        dma.irq1_irq_number = 113;
 
         recv.priority = 254;
         hwrng.priority = 254;
@@ -88,7 +95,10 @@ assembly {
         server.simple = 1;
         server.simple_untyped20_pool = 16;
         server.cnode_size_bits = 18;
-        server.dma_pool = 0x100000;
+        server.dma_pool = 0x10000;
         server.dma_pool_paddr = 0x20000000;
+
+        recv.dma_pool = 0x10000;
+        recv.dma_pool_paddr = 0x20010000;
     }
 }

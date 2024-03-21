@@ -15,6 +15,22 @@ extern void *uart_reg_translate_paddr(uintptr_t paddr, size_t size);
 extern void *gpio_reg_translate_paddr(uintptr_t paddr, size_t size);
 extern void *timer_reg_translate_paddr(uintptr_t paddr, size_t size);
 
+static inline uint32_t timer_get_ms()
+{
+    uint64_t tick = timer_regs->clo | ((uint64_t)timer_regs->chi << 32);
+    return (uint32_t)(freq_cycles_and_hz_to_ns(tick, TIMER_FREQ) / NS_IN_MS);
+}
+
+static inline void timer_set_timeout(uint32_t ms, uint8_t channel)
+{
+    if(timer_regs->cs & TIMER_CS_Mx(channel))
+        timer_regs->cs = TIMER_CS_Mx(channel);
+
+    uint32_t tick = timer_regs->clo;
+    uint32_t timeout = tick + (uint32_t)freq_ns_and_hz_to_cycles(ms * NS_IN_MS, TIMER_FREQ);
+    timer_regs->chan[channel] = timeout;
+}
+
 static void uart_gpio_configure(int tx_pin, int rx_pin, int alt)
 {
     volatile struct bcm2711_gpio_regs *gpio = gpio_reg_translate_paddr(GPIO_PADDR, 0x1000);
@@ -76,7 +92,43 @@ static void uart_init(volatile struct pl011_regs *uart, uint32_t baud_rate)
     uart->cr |= BIT(0);
 }
 
+struct dma_channel dma_chan;
 static uint8_t buffer[1024];
+struct dma_uart_config uart_config = {
+        .io_bus_addr = 0x7e201800,
+        .permap_in = UART4_RX,
+        .permap_out = UART4_TX,
+    };
+void dma_irq_handle()
+{
+    printf("DMA IRQ\n");
+    dma_chan.regs->cs |= DMA_CS_END | DMA_CS_INT;
+    int size = dma_transform_read_get_data(&dma_chan, buffer);
+    for(int i = 0; i < size; i++)
+        printf("%d ",buffer[i]);
+    printf("\n");
+    timer_set_timeout(100, TIMER_CHAN_1);
+    dma_transform_read_uart(&dma_chan, &uart_config);
+    dma_irq_acknowledge();
+}
+
+void timer_irq_handle()
+{
+    printf("timeout\n");
+    if(timer_regs->cs & TIMER_CS_Mx(TIMER_CHAN_1)) {
+        timer_regs->cs = TIMER_CS_Mx(TIMER_CHAN_1);
+        int size = dma_transform_read_get_data(&dma_chan, buffer);
+        for(int i = 0; i < size; i++)
+            printf("%d ",buffer[i]);
+        printf("\n");
+
+        timer_set_timeout(5000, TIMER_CHAN_1);
+        dma_reset(&dma_chan);
+        dma_transform_read_uart(&dma_chan, &uart_config);
+    }
+    timer_irq_acknowledge();
+}
+
 
 int run()
 {
@@ -88,27 +140,15 @@ int run()
     uart_init(gcs_uart, 57600);
     uart_init(fc_uart, 57600);
 
+    timer_regs = timer_reg_translate_paddr(TIMER_ADDR, 0x1000);
+
     ps_io_ops_t io_ops;
     camkes_io_ops(&io_ops);
-    struct dma_channel dma_chan;
-    struct dma_uart_config uart_config = {
-        .io_bus_addr = 0x7e201800,
-        .permap_in = UART4_RX,
-        .permap_out = UART4_TX,
-    };
     dma_init(&io_ops.dma_manager, &dma_chan, 0);
 
-    for(int i = 0; i < 1024; i++) {
-        buffer[i] = i;
-    }
+    dma_transform_read_uart(&dma_chan, &uart_config);
 
-    dma_transform_send_uart(&dma_chan, buffer, 1024, &uart_config);
-
-    volatile struct dma_channel_regs *dma_chan_reg = dma_chan.regs;
-    while(dma_chan_reg->cs & 0x1);
-    status = dma_chan_reg->cs & (1 << 8)? -1 : 0;
-
-    printf("DMA status: %d\n", status);
+    while(1);
 }
 
 

@@ -67,8 +67,8 @@ static SM4_KEY sm4_encrypt_key;
 static SM4_KEY sm4_decrypt_key;
 static uint8_t sm4_iv[16];
 
-static struct dma_channel dma_channel0;
-static struct dma_channel dma_channel1;
+static struct dma_channel dma_channel2;
+static struct dma_channel dma_channel3;
 static struct dma_uart_config gcs_uart_config;
 static struct dma_uart_config fc_uart_config;
 
@@ -90,7 +90,7 @@ static inline uint8_t ring_read_fc()
 
 static inline void chiper_package_send_dma(struct chiper_package* package)
 {
-    dma_transform_send_uart(&dma_channel0, package, package->len + 4, &gcs_uart_config);
+    dma_transform_send_uart(&dma_channel2, package, package->len + 4, &gcs_uart_config);
 }
 
 static inline void chiper_package_send(struct chiper_package* package)
@@ -209,7 +209,7 @@ void decryption_server(void *arg0, void *arg1, void *ipc_buf)
 
         // for(size_t i = 0; i < plain_len; i++)
         //     uart_putchar(fc_uart, plain_buf[i]);
-        dma_transform_send_uart(&dma_channel1, plain_buf, plain_len, &fc_uart_config);
+        dma_transform_send_uart(&dma_channel3, plain_buf, plain_len, &fc_uart_config);
     }
 }
 
@@ -365,8 +365,8 @@ static void init_device()
 {
     ps_io_ops_t io_ops;
     camkes_io_ops(&io_ops);
-    dma_init(&io_ops.dma_manager, &dma_channel0, 0);
-    dma_init(&io_ops.dma_manager, &dma_channel1, 1);
+    dma_init(&io_ops.dma_manager, &dma_channel2, 2);
+    dma_init(&io_ops.dma_manager, &dma_channel3, 3);
 
     gcs_uart_config.io_bus_addr = 0x7e201800;
     gcs_uart_config.permap_in = UART4_RX;
